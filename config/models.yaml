@@ -1,0 +1,11 @@
+default: nova-fast
+available:
+  - nova-fast
+  - gemini-fast
+  - gemini-search
+  - openai-fast
+  - grok
+  - mistral
+endpoint:
+  base_url: "https://gen.pollinations.ai/v1"
+  api_key: ""

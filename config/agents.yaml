@@ -1,0 +1,13 @@
+heartbeat:
+  ping_interval_seconds: 30
+  response_timeout_seconds: 5
+  max_restart_attempts: 10
+
+memory:
+  short_term_max_turns: 10
+  long_term_max_results: 5
+  backup_interval_days: 7
+
+logging:
+  max_bytes: 5242880
+  backup_count: 3

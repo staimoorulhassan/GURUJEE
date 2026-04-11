@@ -1,0 +1,5 @@
+provider: elevenlabs
+model: eleven_turbo_v2
+streaming: true
+sample_rate: 22050
+voice_id: null
