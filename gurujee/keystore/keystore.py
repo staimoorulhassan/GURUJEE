@@ -55,6 +55,14 @@ class Keystore:
     # Public interface                                                      #
     # ------------------------------------------------------------------ #
 
+    def set_pin(self, pin: str) -> None:
+        """Update the PIN used for the next unlock() call.
+
+        Does NOT reset lockout state — the same instance must be reused across
+        attempts so that _attempt_count and _lockout_until are preserved.
+        """
+        self._pin = pin
+
     def unlock(self) -> None:
         """Derive key from PIN + device salt and verify by decrypting.
 

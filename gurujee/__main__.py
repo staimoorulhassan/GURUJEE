@@ -82,10 +82,14 @@ def _prompt_pin(
     """
     from gurujee.keystore.keystore import Keystore, KeystoreError
 
+    # Single instance reused across all attempts so _attempt_count and
+    # _lockout_until persist — recreating each iteration would reset them,
+    # allowing unlimited brute-force attempts.
+    ks = Keystore(keystore_path, pin="")
     attempts_shown = 0
     while attempts_shown < max_display_attempts:
         pin = Prompt.ask("🔐 Enter keystore PIN", password=True)
-        ks = Keystore(keystore_path, pin=pin)
+        ks.set_pin(pin)
         try:
             ks.unlock()
             return ks
