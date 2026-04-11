@@ -398,7 +398,7 @@ class SetupWizard:
         script_content = (
             "#!/data/data/com.termux/files/usr/bin/bash\n"
             "sleep 5\n"
-            f"cd {install_dir}\n"
+            f"cd '{install_dir}'\n"
             "python -m gurujee --headless >> data/boot.log 2>&1 &\n"
         )
         self._boot_script_path.write_text(script_content, encoding="utf-8")
