@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:agentfactory.panaversity.org)",
+      "WebFetch(domain:deepwiki.com)",
+      "Bash(pip install:*)",
+      "Bash(specifyplus:*)",
+      "Bash(dir \"C:\\\\\\\\Users\\\\\\\\Taimoor\\\\\\\\Desktop\\\\\\\\GURUJEE\")",
+      "WebSearch",
+      "WebFetch(domain:github.github.io)",
+      "Bash(uv --version)",
+      "Bash(uv tool:*)",
+      "Bash(specify init:*)"
+    ]
+  }
+}
