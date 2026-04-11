@@ -137,8 +137,20 @@ class SoulAgent(BaseAgent):
             )
 
     async def _await_memory_response(self) -> Message:
+        """Wait for MEMORY_CONTEXT_RESPONSE, re-queuing unrelated messages.
+
+        A 2-second timeout prevents livelock if the memory agent is unavailable
+        or a message flood keeps displacing the response before it is seen.
+        """
+        deadline = asyncio.get_event_loop().time() + 2.0
         while True:
-            msg = await self._inbox.get()
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                raise asyncio.TimeoutError("memory context response timed out")
+            try:
+                msg = await asyncio.wait_for(self._inbox.get(), timeout=remaining)
+            except asyncio.TimeoutError:
+                raise asyncio.TimeoutError("memory context response timed out")
             if msg.type == MessageType.MEMORY_CONTEXT_RESPONSE:
                 return msg
             # Re-queue other messages for later processing

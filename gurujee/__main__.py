@@ -45,10 +45,7 @@ def main() -> NoReturn:
         sys.exit(0)
 
     # Prompt for PIN before starting
-    from gurujee.keystore.keystore import Keystore, KeystoreError
-
-    keystore = Keystore(keystore_path, pin="")  # pin set by _prompt_pin
-    _prompt_pin(keystore, keystore_path, data_dir)
+    keystore = _prompt_pin(keystore_path, data_dir)
 
     if args.headless:
         os.environ["GURUJEE_HEADLESS"] = "1"
@@ -74,13 +71,12 @@ def _is_first_run(setup_state_path: Path) -> bool:
 
 
 def _prompt_pin(
-    keystore: "Keystore",
     keystore_path: Path,
     data_dir: Path,
     *,
     max_display_attempts: int = 6,
-) -> None:
-    """Prompt the user for their PIN and unlock the keystore.
+) -> "Keystore":
+    """Prompt the user for their PIN and return an unlocked Keystore.
 
     Handles lockout display and the forgot-PIN wipe flow.
     """
@@ -89,28 +85,23 @@ def _prompt_pin(
     attempts_shown = 0
     while attempts_shown < max_display_attempts:
         pin = Prompt.ask("🔐 Enter keystore PIN", password=True)
-        # Rebuild Keystore with the entered PIN
         ks = Keystore(keystore_path, pin=pin)
         try:
             ks.unlock()
-            # Copy key reference into the passed keystore object
-            keystore._pin = pin
-            keystore._key = ks._key
-            keystore._path = ks._path
-            return
+            return ks
         except KeystoreError as exc:
             if exc.code == "locked_out":
                 _console.print(
                     f"[red]Too many wrong attempts. Locked for {exc.lockout_seconds}s.[/red]"
                 )
-                _show_forgot_pin(keystore, keystore_path, data_dir)
-                return
+                _show_forgot_pin(ks, keystore_path, data_dir)
+                sys.exit(1)
             elif exc.code == "invalid_pin":
                 attempts_shown += 1
                 remaining = max_display_attempts - attempts_shown
                 _console.print(f"[red]Incorrect PIN.[/red] ({remaining} attempts remaining)")
                 if attempts_shown >= 3:
-                    _show_forgot_pin(keystore, keystore_path, data_dir)
+                    _show_forgot_pin(ks, keystore_path, data_dir)
                     # Continue loop — user may have cancelled the wipe
             else:
                 _console.print(f"[red]Keystore error: {exc}[/red]")
@@ -129,7 +120,6 @@ def _show_forgot_pin(keystore: "Keystore", keystore_path: Path, data_dir: Path) 
         "and re-enter all credentials from scratch.\n"
     )
     if Confirm.ask("Wipe keystore and re-run setup?", default=False):
-        keystore._path = keystore_path
         keystore.wipe()
         _console.print("[green]Keystore wiped.[/green]")
         from gurujee.setup.wizard import SetupWizard

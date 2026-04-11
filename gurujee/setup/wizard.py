@@ -350,14 +350,20 @@ class SetupWizard:
 
         try:
             voice_id = self._upload_voice_sample(sample_path)
-        finally:
+        except Exception:
+            # Upload failed — delete the sample and re-raise; voice_id is never used.
             if sample_path.exists():
                 sample_path.unlink()
-            if sample_path.exists():
+            raise
+        else:
+            # Upload succeeded — delete the sample before proceeding to keystore.
+            try:
+                sample_path.unlink(missing_ok=True)
+            except OSError as exc:
                 raise SetupStepError(
                     "cleanup_failed",
-                    "Could not delete raw audio sample from device.",
-                )
+                    f"Could not delete raw audio sample from device: {exc}",
+                ) from exc
 
         ks_path = self._data_dir / "gurujee.keystore"
         pin = Prompt.ask("Re-enter PIN to store voice ID", password=True)
@@ -441,11 +447,18 @@ class SetupWizard:
         thread.start()
 
     def _poll_daemon_ready(self, timeout: int = 10) -> bool:
-        """Poll until daemon reports all agents running or timeout expires."""
+        """Poll until the boot log confirms agents started, or timeout expires."""
         import time
+        boot_log = self._data_dir / "boot.log"
         deadline = time.time() + timeout
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as prog:
-            task = prog.add_task("Waiting for agents...", total=None)
+            prog.add_task("Waiting for agents...", total=None)
             while time.time() < deadline:
                 time.sleep(0.5)
-        return True
+                if boot_log.exists():
+                    try:
+                        if "GatewayDaemon: started agent" in boot_log.read_text(encoding="utf-8"):
+                            return True
+                    except OSError:
+                        pass
+        return False

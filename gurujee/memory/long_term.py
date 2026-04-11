@@ -111,12 +111,20 @@ class LongTermMemory:
         ]
 
     def backup_weekly(self, backups_dir: Path) -> None:
-        """Copy the database to backups_dir if no backup exists for today."""
+        """Copy the database to backups_dir if no backup exists from the past 7 days."""
         backups_dir.mkdir(parents=True, exist_ok=True)
-        today = datetime.now(timezone.utc).strftime("%Y%m%d")
-        dest = backups_dir / f"memory_{today}.db"
-        if dest.exists():
-            return
+        now = datetime.now(timezone.utc)
+        # Check whether any backup file is dated within the last 7 days.
+        for existing in backups_dir.glob("memory_????????.db"):
+            try:
+                stamp = datetime.strptime(existing.stem[7:], "%Y%m%d").replace(
+                    tzinfo=timezone.utc
+                )
+                if (now - stamp).days < 7:
+                    return  # recent backup exists
+            except ValueError:
+                pass
+        dest = backups_dir / f"memory_{now.strftime('%Y%m%d')}.db"
         try:
             shutil.copy2(self._db_path, dest)
             logger.info("Memory backup written to %s", dest)

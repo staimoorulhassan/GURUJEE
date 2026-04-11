@@ -57,9 +57,20 @@ class GatewayDaemon:
         return {name: state.status.name for name, state in self._states.items()}
 
     def shutdown(self, reason: str = "requested") -> None:
-        """Signal all agents to stop and initiate graceful shutdown."""
+        """Signal all agents to stop and initiate graceful shutdown.
+
+        Safe to call from synchronous contexts (e.g. Textual on_unmount).
+        Uses call_soon_threadsafe when a running loop exists; falls back to
+        setting the shutdown event directly so the start() wait unblocks.
+        """
         logger.info("GatewayDaemon: shutdown requested (%s)", reason)
-        asyncio.create_task(self._broadcast_shutdown(reason))
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._broadcast_shutdown(reason))
+        except RuntimeError:
+            # No running loop (called from a non-async context) — set the
+            # event directly so start() returns; agents will be GC'd.
+            self._shutdown_event.set()
 
     # ------------------------------------------------------------------ #
     # Agent startup                                                         #

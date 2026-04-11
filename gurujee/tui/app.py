@@ -8,7 +8,7 @@ from typing import Optional
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 
-from gurujee.agents.base_agent import MessageType
+from gurujee.agents.base_agent import Message, MessageType
 from gurujee.tui.screens.agent_status_screen import AgentStatusScreen, AgentStatusUpdate
 from gurujee.tui.screens.chat_screen import (
     ChatChunk,
@@ -83,8 +83,8 @@ class GurujeeApp(App):
             return
         asyncio.create_task(
             self._daemon._bus.send(
-                self._daemon._bus._build_message(  # type: ignore[attr-defined]
-                    msg_type=msg_type,
+                Message(
+                    type=msg_type,
                     from_agent="tui",
                     to_agent="soul",
                     payload=payload,
