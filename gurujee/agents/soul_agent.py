@@ -137,25 +137,34 @@ class SoulAgent(BaseAgent):
             )
 
     async def _await_memory_response(self) -> Message:
-        """Wait for MEMORY_CONTEXT_RESPONSE, re-queuing unrelated messages.
+        """Wait for MEMORY_CONTEXT_RESPONSE, holding unrelated messages aside.
 
-        A 2-second timeout prevents livelock if the memory agent is unavailable
-        or a message flood keeps displacing the response before it is seen.
+        Drains the inbox into a local buffer rather than re-queuing each message
+        immediately, eliminating the starvation risk where a message flood keeps
+        cycling non-matching messages back to the front before the response arrives.
+        All held messages are returned to the inbox (FIFO order) on exit, whether
+        the response was found or the 2-second deadline was reached.
         """
+        held: list[Message] = []
+        response: Optional[Message] = None
         deadline = asyncio.get_event_loop().time() + 2.0
-        while True:
-            remaining = deadline - asyncio.get_event_loop().time()
-            if remaining <= 0:
-                raise asyncio.TimeoutError("memory context response timed out")
-            try:
-                msg = await asyncio.wait_for(self._inbox.get(), timeout=remaining)
-            except asyncio.TimeoutError:
-                raise asyncio.TimeoutError("memory context response timed out")
-            if msg.type == MessageType.MEMORY_CONTEXT_RESPONSE:
-                return msg
-            # Re-queue other messages for later processing
-            await self._inbox.put(msg)
-            await asyncio.sleep(0)
+        try:
+            while True:
+                remaining = deadline - asyncio.get_event_loop().time()
+                if remaining <= 0:
+                    raise asyncio.TimeoutError("memory context response timed out")
+                try:
+                    msg = await asyncio.wait_for(self._inbox.get(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    raise asyncio.TimeoutError("memory context response timed out")
+                if msg.type == MessageType.MEMORY_CONTEXT_RESPONSE:
+                    response = msg
+                    return msg
+                held.append(msg)
+        finally:
+            # Restore held messages in original order regardless of outcome.
+            for m in held:
+                await self._inbox.put(m)
 
     # ------------------------------------------------------------------ #
     # Soul loading and prompt building                                      #

@@ -4,10 +4,11 @@ from __future__ import annotations
 import logging
 import shutil
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Generator, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,13 @@ class LongTermMemory:
         # Re-initialise with empty schema
         self.init_db()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Generator[sqlite3.Connection, None, None]:
+        """Context manager that yields a Connection, commits/rolls back, then closes it."""
         conn = sqlite3.connect(str(self._db_path))
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            with conn:        # commits on clean exit, rolls back on exception
+                yield conn
+        finally:
+            conn.close()      # always release the file descriptor

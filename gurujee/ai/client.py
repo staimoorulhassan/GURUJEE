@@ -10,12 +10,6 @@ from urllib.parse import urlparse
 
 import httpx
 from openai import AsyncOpenAI
-from tenacity import (
-    AsyncRetrying,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from gurujee.config.loader import ConfigLoader
 
@@ -53,21 +47,37 @@ class AIClient:
         """Yield response tokens as they arrive.
 
         Uses the model from data/user_config.yaml unless *model* is explicitly passed.
-        Retries on connection/timeout errors up to 3 times.
+        Retries on connection/timeout errors up to 3 times, but only when no tokens
+        have been yielded yet — mid-stream retries would re-send already-delivered
+        tokens to the caller (tenacity AsyncRetrying has this flaw with generators).
         On exhausted retries, raises the last exception (caller adds to pending queue).
         """
         resolved_model = model or self._active_model()
         client = self._get_client()
+        last_exc: Optional[Exception] = None
 
-        async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, min=2, max=30),
-            retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
-            reraise=True,
-        ):
-            with attempt:
+        for attempt in range(3):
+            tokens_yielded = 0
+            try:
                 async for token in self._stream(client, messages, resolved_model):
+                    tokens_yielded += 1
                     yield token
+                return  # stream completed successfully
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                if tokens_yielded > 0:
+                    # Already sent tokens — cannot safely restart the stream.
+                    raise
+                last_exc = exc
+                logger.warning(
+                    "AIClient: stream attempt %d/3 failed (%s), retrying...",
+                    attempt + 1,
+                    exc,
+                )
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt * 2)  # 2s, 4s
+
+        assert last_exc is not None
+        raise last_exc
 
     async def retry_pending(self) -> AsyncGenerator[tuple[dict[str, Any], str], None]:
         """Re-send queued messages one at a time.
