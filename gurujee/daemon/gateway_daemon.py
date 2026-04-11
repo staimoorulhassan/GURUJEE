@@ -40,6 +40,10 @@ class GatewayDaemon:
         self._bus = MessageBus()
         self._states: dict[str, AgentState] = {}
         self._shutdown_event = asyncio.Event()
+        # Register the gateway's own inbox so agents can address "gateway".
+        self._inbox: asyncio.Queue[Message] = asyncio.Queue()
+        self._bus.register_agent("gateway", self._inbox)
+        self._consumer_task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
 
     # ------------------------------------------------------------------ #
     # Public API                                                            #
@@ -48,6 +52,9 @@ class GatewayDaemon:
     async def start(self) -> None:
         """Start all agents and run until shutdown."""
         logger.info("GatewayDaemon: starting")
+        self._consumer_task = asyncio.create_task(
+            self._consume_inbox(), name="gateway:consumer"
+        )
         await self._start_agents()
         await self._shutdown_event.wait()
         logger.info("GatewayDaemon: shutdown complete")
@@ -167,6 +174,27 @@ class GatewayDaemon:
         await self._emit_status_update(name, AgentStatus.RUNNING)
 
     # ------------------------------------------------------------------ #
+    # Gateway inbox consumer                                                #
+    # ------------------------------------------------------------------ #
+
+    async def _consume_inbox(self) -> None:
+        """Drain the gateway inbox and dispatch messages until shutdown."""
+        while not self._shutdown_event.is_set():
+            try:
+                msg = await asyncio.wait_for(self._inbox.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                break
+            if msg.type == MessageType.AGENT_STATUS_UPDATE:
+                agent_name = msg.payload.get("agent", "")
+                reason = msg.payload.get("reason", "")
+                if reason == "pong_timeout" and agent_name:
+                    await self._on_agent_failure(agent_name)
+            elif msg.type == MessageType.SHUTDOWN:
+                break
+
+    # ------------------------------------------------------------------ #
     # Messaging helpers                                                     #
     # ------------------------------------------------------------------ #
 
@@ -206,4 +234,6 @@ class GatewayDaemon:
             _, pending = await asyncio.wait(tasks, timeout=5.0)
             for task in pending:
                 task.cancel()
+        if self._consumer_task and not self._consumer_task.done():
+            self._consumer_task.cancel()
         self._shutdown_event.set()
