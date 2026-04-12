@@ -43,6 +43,7 @@ class AIClient:
         self,
         messages: list[dict[str, str]],
         model: Optional[str] = None,
+        tools: Optional[list] = None,
     ) -> AsyncGenerator[str, None]:
         """Yield response tokens as they arrive.
 
@@ -59,7 +60,7 @@ class AIClient:
         for attempt in range(3):
             tokens_yielded = 0
             try:
-                async for token in self._stream(client, messages, resolved_model):
+                async for token in self._stream(client, messages, resolved_model, tools):
                     tokens_yielded += 1
                     yield token
                 return  # stream completed successfully
@@ -137,13 +138,28 @@ class AIClient:
         client: AsyncOpenAI,
         messages: list[dict[str, str]],
         model: str,
+        tools: Optional[list] = None,
     ) -> AsyncGenerator[str, None]:
-        stream = await client.chat.completions.create(
-            model=model,
-            messages=messages,  # type: ignore[arg-type]
-            stream=True,
-        )
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": messages,  # type: ignore[arg-type]
+            "stream": True,
+        }
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+
+        stream = await client.chat.completions.create(**kwargs)
         async for chunk in stream:
             delta = chunk.choices[0].delta if chunk.choices else None
-            if delta and delta.content:
+            if not delta:
+                continue
+            if delta.content:
                 yield delta.content
+            # Surface tool_calls as a special token so callers can detect them
+            if getattr(delta, "tool_calls", None):
+                import json as _json
+                for tc in delta.tool_calls:
+                    fn = getattr(tc, "function", None)
+                    if fn:
+                        yield f"__tool_call__:{_json.dumps({'name': fn.name or '', 'arguments': fn.arguments or '{}'})}"

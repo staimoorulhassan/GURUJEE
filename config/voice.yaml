@@ -2,4 +2,5 @@ provider: elevenlabs
 model: eleven_turbo_v2
 streaming: true
 sample_rate: 22050
+sample_duration_seconds: 30
 voice_id: null

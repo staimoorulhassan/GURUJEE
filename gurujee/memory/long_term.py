@@ -35,19 +35,54 @@ class LongTermMemory:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
+            # --- memories ---
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS memories (
-                    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                    content   TEXT    NOT NULL,
-                    tags      TEXT    NOT NULL DEFAULT '',
-                    category  TEXT    NOT NULL,
-                    importance REAL   NOT NULL DEFAULT 0.5,
-                    created_at TEXT  NOT NULL,
-                    source    TEXT    NOT NULL DEFAULT 'conversation'
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    content    TEXT    NOT NULL,
+                    tags       TEXT    NOT NULL DEFAULT '',
+                    category   TEXT    NOT NULL,
+                    importance REAL    NOT NULL DEFAULT 0.5,
+                    created_at TEXT    NOT NULL,
+                    source     TEXT    NOT NULL DEFAULT 'conversation'
                 )
             """)
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_tags ON memories(tags)"
+            )
+            # --- automation_log ---
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS automation_log (
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    command_type TEXT    NOT NULL,
+                    input_text   TEXT    NOT NULL,
+                    action_json  TEXT    NOT NULL,
+                    status       TEXT    NOT NULL,
+                    error_message TEXT,
+                    duration_ms  INTEGER,
+                    created_at   TEXT    NOT NULL
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_automation_created "
+                "ON automation_log(created_at DESC)"
+            )
+            # --- notification_cache ---
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS notification_cache (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    notif_id    TEXT    NOT NULL,
+                    app_package TEXT    NOT NULL,
+                    app_name    TEXT    NOT NULL,
+                    title       TEXT,
+                    content     TEXT,
+                    is_read     INTEGER NOT NULL DEFAULT 0,
+                    fetched_at  TEXT    NOT NULL
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_notif_fetched "
+                "ON notification_cache(fetched_at DESC)"
             )
 
     def insert(
@@ -110,6 +145,152 @@ class LongTermMemory:
             )
             for r in rows
         ]
+
+    # ------------------------------------------------------------------ #
+    # High-level API (tasks.md contract)                                    #
+    # ------------------------------------------------------------------ #
+
+    def store_memory(
+        self,
+        content: str,
+        tags: str,
+        category: str,
+        importance: float = 0.5,
+        source: str = "conversation",
+    ) -> MemoryRecord:
+        """Wrapper around insert() — matches tasks.md API contract."""
+        return self.insert(content, tags, category, importance, source)
+
+    def retrieve_memories(self, query: str, limit: int = 5) -> list[MemoryRecord]:
+        """Hybrid keyword search with configurable limit."""
+        keywords = [w.strip() for w in query.split() if w.strip()]
+        if not keywords:
+            return []
+        conditions = " OR ".join(
+            "(tags LIKE ? OR content LIKE ?)" for _ in keywords
+        )
+        params: list[str] = []
+        for kw in keywords:
+            like = f"%{kw}%"
+            params.extend([like, like])
+        sql = f"""
+            SELECT id, content, tags, category, importance, created_at, source
+            FROM memories
+            WHERE {conditions}
+            ORDER BY (importance * 2 + 1.0 / (julianday('now') - julianday(created_at) + 1)) DESC
+            LIMIT {int(limit)}
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [
+            MemoryRecord(
+                id=r[0], content=r[1], tags=r[2], category=r[3],
+                importance=r[4], created_at=r[5], source=r[6],
+            )
+            for r in rows
+        ]
+
+    def log_automation(
+        self,
+        command_type: str,
+        input_text: str,
+        action_json: str,
+        status: str,
+        error_message: Optional[str] = None,
+        duration_ms: Optional[int] = None,
+    ) -> int:
+        """Insert a row into automation_log; returns the new row id."""
+        created_at = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """INSERT INTO automation_log
+                   (command_type, input_text, action_json, status,
+                    error_message, duration_ms, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (command_type, input_text, action_json, status,
+                 error_message, duration_ms, created_at),
+            )
+            return cursor.lastrowid  # type: ignore[return-value]
+
+    def prune_automation_log(self, max_entries: int = 500) -> None:
+        """Delete oldest automation_log rows beyond *max_entries*."""
+        with self._connect() as conn:
+            conn.execute(
+                """DELETE FROM automation_log
+                   WHERE id NOT IN (
+                       SELECT id FROM automation_log
+                       ORDER BY created_at DESC
+                       LIMIT ?
+                   )""",
+                (max_entries,),
+            )
+
+    def cache_notifications(self, notifs: list[dict]) -> None:
+        """Bulk-insert notification dicts into notification_cache, then prune."""
+        fetched_at = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            for n in notifs:
+                conn.execute(
+                    """INSERT INTO notification_cache
+                       (notif_id, app_package, app_name, title, content,
+                        is_read, fetched_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        n.get("notif_id", ""),
+                        n.get("app_package", ""),
+                        n.get("app_name", ""),
+                        n.get("title"),
+                        n.get("content"),
+                        int(n.get("is_read", 0)),
+                        fetched_at,
+                    ),
+                )
+        self.prune_notification_cache()
+
+    def get_notifications(self, limit: int = 20) -> list[dict]:
+        """Return the most recent *limit* notification_cache rows as dicts."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT id, notif_id, app_package, app_name, title,
+                          content, is_read, fetched_at
+                   FROM notification_cache
+                   ORDER BY fetched_at DESC
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [
+            {
+                "id": r[0], "notif_id": r[1], "app_package": r[2],
+                "app_name": r[3], "title": r[4], "content": r[5],
+                "is_read": bool(r[6]), "fetched_at": r[7],
+            }
+            for r in rows
+        ]
+
+    def prune_notification_cache(self, max_entries: int = 100) -> None:
+        """Delete oldest notification_cache rows beyond *max_entries*."""
+        with self._connect() as conn:
+            conn.execute(
+                """DELETE FROM notification_cache
+                   WHERE id NOT IN (
+                       SELECT id FROM notification_cache
+                       ORDER BY fetched_at DESC
+                       LIMIT ?
+                   )""",
+                (max_entries,),
+            )
+
+    def backup(self, backups_dir: Path) -> None:
+        """Alias for backup_weekly() — matches tasks.md API contract."""
+        self.backup_weekly(backups_dir)
+
+    def handle_corruption(self, path: Path) -> None:
+        """Alias for handle_corrupt() — matches tasks.md API contract."""
+        self.handle_corrupt(path)
+
+    # ------------------------------------------------------------------ #
+    # Scheduled backup / corruption recovery                               #
+    # ------------------------------------------------------------------ #
 
     def backup_weekly(self, backups_dir: Path) -> None:
         """Copy the database to backups_dir if no backup exists from the past 7 days."""

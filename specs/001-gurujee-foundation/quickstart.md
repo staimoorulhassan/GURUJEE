@@ -1,6 +1,6 @@
 # GURUJEE Foundation — Developer Quickstart
 
-**Branch**: `001-gurujee-foundation` | **Date**: 2026-04-11
+**Branch**: `001-gurujee-foundation` | **Date**: 2026-04-12
 **Audience**: Developer setting up the project for the first time (on Android Termux or
 a Linux dev machine for testing).
 
@@ -108,18 +108,81 @@ startup on phone reboot via Termux:Boot.
 
 ---
 
-## Step 4 — Run tests
+## Step 4 — Open the PWA Chat UI
+
+With the daemon running in headless mode, open a browser (or Android WebView) and navigate to:
+
+```
+http://localhost:7171
+```
+
+- Chat bubbles stream token-by-token (SSE)
+- Agent status bar shows live state (green = all running, amber = degraded)
+- Reloading with network disabled loads from the service worker cache
+
+**API endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Daemon readiness + Shizuku warning |
+| POST | `/chat` | SSE streaming chat response |
+| GET | `/agents` | All agent statuses |
+| POST | `/automate` | Execute device command via Shizuku |
+| GET | `/notifications` | Latest notification cache |
+| WS | `/ws` | Real-time agent & automation events |
+
+---
+
+## Step 5 — Run tests with coverage
 
 ```bash
 cd ~/gurujee
 pytest tests/ -v --tb=short
 ```
 
-Target coverage: 70% on all agent files.
+Target: **≥ 70% coverage** on all `gurujee/` files.
 
 ```bash
 pytest tests/ --cov=gurujee --cov-report=term-missing
 ```
+
+**Measured coverage (2026-04-12):** 118 tests, **70%** total (`TOTAL 1965 stmts, 582 missed`). All tests pass.
+
+To run only a specific module's tests:
+
+```bash
+pytest tests/test_server_chat.py tests/test_automation_agent.py -v
+```
+
+---
+
+## Step 6 — Build Launcher APK (non-technical user distribution)
+
+Requires [Buildozer](https://buildozer.readthedocs.io/) on a **Linux** machine (not Termux):
+
+```bash
+# On Linux CI or dev box
+cd gurujee/  # repo root
+pip install buildozer
+
+# Place APKs in launcher/assets/ before building:
+#   launcher/assets/termux.apk          (Termux from F-Droid)
+#   launcher/assets/termux-api.apk      (Termux:API from F-Droid)
+#   launcher/assets/icon.png            (512×512 app icon)
+#   launcher/assets/presplash.png       (splash screen)
+
+buildozer -v android debug
+```
+
+The `.apk` is written to `bin/gurujee-1.0.0-debug.apk`.
+
+Install on a device:
+
+```bash
+adb install -r bin/gurujee-1.0.0-debug.apk
+```
+
+Fresh device flow: tap GURUJEE icon → ProgressScreen installs Termux → bootstrap script runs → daemon starts → WebViewScreen opens PWA.
 
 ---
 
@@ -153,47 +216,69 @@ gurujee/                       # Python package
 │   └── long_term.py           # SQLite MemoryRecord
 ├── ai/
 │   └── client.py              # AsyncOpenAI wrapper + tenacity retry
-└── config/
-    └── loader.py              # PyYAML/ruamel.yaml loaders
+├── config/
+│   └── loader.py              # PyYAML/ruamel.yaml loaders
+├── server/
+│   ├── app.py                 # FastAPI factory (global exception handler, server.log)
+│   ├── routers/
+│   │   ├── chat.py            # POST /chat (SSE streaming)
+│   │   ├── health.py          # GET /health (+ shizuku_inactive warning)
+│   │   ├── agents.py          # GET /agents
+│   │   ├── automate.py        # POST /automate
+│   │   └── notifications.py   # GET/POST /notifications
+│   ├── websocket.py           # WS /ws — live events
+│   └── static/                # PWA (index.html, app.js, style.css, sw.js, manifest.json)
+└── automation/
+    ├── executor.py            # ShizukuExecutor
+    ├── tool_router.py         # function-call → action dispatch
+    └── actions/               # apps, device, input, notifications, system
 
-agents/                        # runtime config (version-controlled templates)
-├── soul_identity.yaml         # GURUJEE identity (ruamel.yaml)
-
-config/                        # version-controlled config templates
-├── models.yaml                # AI model catalogue + Pollinations endpoint
-├── agents.yaml                # heartbeat intervals, memory limits, log config
-└── voice.yaml                 # ElevenLabs provider config (no credentials)
+launcher/                      # Kivy APK for non-technical users
+├── bootstrap.py               # Termux install + daemon polling
+├── main.py                    # GurujeeApp (ProgressScreen + WebViewScreen)
+└── buildozer.spec             # android.api=34, minapi=29, arm64-v8a
 
 agents/                        # shipped identity templates
-└── soul_identity.yaml         # GURUJEE default identity (ruamel.yaml)
+└── soul_identity.yaml
 
-data/                          # runtime data — GITIGNORED
-├── soul_identity.yaml         # runtime copy of soul template (populated by wizard step 8)
-├── user_config.yaml           # {active_model, active_voice_id, tui_theme}
-├── setup_state.yaml           # 8-step wizard state
-├── memory.db                  # SQLite long-term memories (WAL mode)
-├── session_context.yaml       # short-term turns persisted across sessions
-├── cron_jobs.yaml             # scheduled tasks (empty Phase 1)
-├── gurujee.keystore           # AES-256-GCM encrypted credentials
-├── heartbeat.log              # rotating, 5MB × 3
-├── boot.log                   # rotating, 5MB × 3
-└── backups/                   # weekly memory.db snapshots
+config/
+├── models.yaml                # AI model catalogue + Pollinations endpoint
+├── agents.yaml                # heartbeat/memory/log config
+├── automation.yaml            # rish path, action timeouts
+└── voice.yaml
+
+data/                          # runtime — GITIGNORED
+├── soul_identity.yaml
+├── user_config.yaml
+├── setup_state.yaml
+├── memory.db                  # SQLite WAL
+├── session_context.yaml
+├── cron_jobs.yaml
+├── gurujee.keystore
+├── heartbeat.log              # 5 MB × 3
+├── memory.log                 # 5 MB × 3
+├── automation.log             # 5 MB × 3
+├── server.log                 # 5 MB × 3
+├── boot.log                   # 5 MB × 3
+└── backups/
 
 tests/
 ├── conftest.py
+├── test_keystore.py
+├── test_ai_client.py
+├── test_setup_wizard.py       # includes boot script content assertions (T070)
 ├── test_soul_agent.py
 ├── test_memory_agent.py
 ├── test_heartbeat_agent.py
-├── test_user_agent.py
-├── test_cron_agent.py
-├── test_keystore.py
-├── test_ai_client.py
-└── test_setup_wizard.py
+├── test_server_chat.py
+├── test_automation_agent.py
+├── test_automation_actions.py
+└── test_server_automate.py
 
-install.sh                     # Termux bootstrap (downloads and runs setup)
+install.sh
 requirements.txt
 pyproject.toml
-.gitignore                     # excludes data/, *.keystore, *.log
+.gitignore
 ```
 
 ---

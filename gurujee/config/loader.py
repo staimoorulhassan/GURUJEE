@@ -75,6 +75,34 @@ class ConfigLoader:
             ry.dump(data, fh)
 
     # ------------------------------------------------------------------ #
+    # Versioned config catalogues (config/ — version-controlled)           #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def load_models(config_dir: Path | None = None) -> dict[str, Any]:
+        """Load config/models.yaml (AI model catalogue + endpoint)."""
+        base = Path(config_dir) if config_dir else Path("config")
+        return ConfigLoader.load_yaml(base / "models.yaml")
+
+    @staticmethod
+    def load_agents(config_dir: Path | None = None) -> dict[str, Any]:
+        """Load config/agents.yaml (heartbeat intervals, memory limits, logging)."""
+        base = Path(config_dir) if config_dir else Path("config")
+        return ConfigLoader.load_yaml(base / "agents.yaml")
+
+    @staticmethod
+    def load_voice(config_dir: Path | None = None) -> dict[str, Any]:
+        """Load config/voice.yaml (voice provider config)."""
+        base = Path(config_dir) if config_dir else Path("config")
+        return ConfigLoader.load_yaml(base / "voice.yaml")
+
+    @staticmethod
+    def load_automation(config_dir: Path | None = None) -> dict[str, Any]:
+        """Load config/automation.yaml (Shizuku path, action timeouts, app packages)."""
+        base = Path(config_dir) if config_dir else Path("config")
+        return ConfigLoader.load_yaml(base / "automation.yaml")
+
+    # ------------------------------------------------------------------ #
     # setup_state.yaml (PyYAML — machine-written)                          #
     # ------------------------------------------------------------------ #
 

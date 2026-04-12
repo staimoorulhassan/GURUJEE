@@ -1,0 +1,29 @@
+# Automation configuration — Shizuku shell command executor settings
+# P3: No root required. All commands via Shizuku rish shell.
+
+shizuku_rish_path: "/data/user/0/moe.shizuku.privileged.api/rish"
+action_timeout_seconds: 10
+screenshot_path: "/data/data/com.termux/files/home/gurujee_screenshot.png"
+
+# Common app package name mappings (extensible by user)
+app_packages:
+  whatsapp: "com.whatsapp"
+  chrome: "com.android.chrome"
+  camera: "com.android.camera2"
+  settings: "com.android.settings"
+  clock: "com.android.deskclock"
+  messages: "com.google.android.apps.messaging"
+  youtube: "com.google.android.youtube"
+  maps: "com.google.android.apps.maps"
+  gmail: "com.google.android.gm"
+  phone: "com.google.android.dialer"
+  contacts: "com.google.android.contacts"
+  spotify: "com.spotify.music"
+  telegram: "org.telegram.messenger"
+  instagram: "com.instagram.android"
+
+# Automation log retention
+log_max_entries: 500
+
+# Notification cache retention
+notification_cache_max_entries: 100

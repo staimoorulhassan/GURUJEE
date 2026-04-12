@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,17 @@ from gurujee.memory.long_term import LongTermMemory
 from gurujee.memory.short_term import ShortTermMemory
 
 logger = logging.getLogger(__name__)
+
+
+def _add_rotating_handler(log: logging.Logger, path: Path) -> None:
+    """Attach a 5 MB × 3 RotatingFileHandler to *log* if not already present."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        h = RotatingFileHandler(str(path), maxBytes=5_242_880, backupCount=3, encoding="utf-8")
+        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        log.addHandler(h)
+    except OSError as exc:
+        log.warning("Could not attach file handler at %s: %s", path, exc)
 
 
 class MemoryAgent(BaseAgent):
@@ -27,6 +39,7 @@ class MemoryAgent(BaseAgent):
         self._data_dir = Path(data_dir) if data_dir else Path(
             os.environ.get("GURUJEE_DATA_DIR", "data")
         )
+        _add_rotating_handler(logger, self._data_dir / "memory.log")
         self._db_path = self._data_dir / "memory.db"
         self._session_path = self._data_dir / "session_context.yaml"
         self._backups_dir = self._data_dir / "backups"

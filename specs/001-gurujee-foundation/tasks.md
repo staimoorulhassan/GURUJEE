@@ -1,156 +1,218 @@
 ---
-description: "Task list for GURUJEE Foundation — Phase 1 (regenerated post-clarification round 2)"
+description: "Task list for GURUJEE Foundation — Phase 1 (v3: PWA + Automation + Launcher APK architecture)"
 ---
 
 # Tasks: GURUJEE Foundation
 
 **Input**: Design documents from `/specs/001-gurujee-foundation/`
-**Prerequisites**: plan.md ✅ spec.md ✅ research.md ✅ data-model.md ✅ contracts/ ✅ quickstart.md ✅
+**Branch**: `001-gurujee-foundation`
+**Generated**: 2026-04-12
+**Architecture**: Split-layer — Python daemon (asyncio) + FastAPI server + PWA static UI (ADR-003 v2)
 
-**Tests**: Included — 70% coverage target is explicitly stated in the tech stack (plan.md).
-Tests follow TDD: write → confirm fail → implement.
+**User Stories from spec.md**:
+- **US1** — First-Time Setup and Onboarding (Priority: P1) 🎯 MVP Entry Gate
+- **US2** — Conversational AI Companion with Persistent Memory (Priority: P1) 🎯 Core Value
 
-**Organization**: Tasks grouped by user story for independent implementation and delivery.
+**New architecture components (2026-04-12 decisions)**:
+- **US3** — FastAPI Server + PWA Chat UI (Priority: P1) — non-technical user interface
+- **US4** — Shizuku Device Automation (Priority: P1) — OpenClaw-equivalent device control
+- **US5** — Launcher APK (Priority: P1) — zero-touch setup for non-technical users
 
-**Changes from prior generation**: Added FR-023 PIN prompt/lockout (T011, T015, T022),
-config/voice.yaml (T007), data/user_config.yaml (T010, T023), wizard _step_keystore_pin (T022),
-wizard _step_ai_model (T023), full streaming render spec in chat_screen (T039),
-updated all agent tasks to use data/soul_identity.yaml runtime path.
-
-## Format: `[ID] [P?] [Story?] Description — file path`
-
-- **[P]**: Parallelizable (different files, no incomplete dependencies)
-- **[Story]**: US1 = Setup & Onboarding, US2 = Conversational AI + Memory
-
-## Path Conventions (from plan.md)
-
-- Python package: `gurujee/` (single project at repo root)
-- Config templates (versioned): `agents/`, `config/`
-- Runtime data (gitignored): `data/`
-- Tests: `tests/`
+**Tests**: Included per spec FR requirements and constitution P10 (70% coverage target).
 
 ---
 
-## Phase 1: Setup
+## Phase 1: Setup (Shared Infrastructure)
 
-**Purpose**: Initialize project structure, all config templates, and development tooling.
-No user story dependencies — start immediately.
+**Purpose**: Repository structure, package scaffolding, config files, and gitignore.
+No user story work begins here.
 
-- [x] T001 Create full gurujee/ package directory tree: `gurujee/__init__.py`, `gurujee/agents/__init__.py`, `gurujee/daemon/__init__.py`, `gurujee/tui/__init__.py`, `gurujee/tui/screens/__init__.py`, `gurujee/setup/__init__.py`, `gurujee/keystore/__init__.py`, `gurujee/memory/__init__.py`, `gurujee/ai/__init__.py`, `gurujee/config/__init__.py`; also create empty `config/`, `agents/`, `tests/`, `data/` directories (data/ will be gitignored)
-- [x] T002 Create `pyproject.toml` — package name `gurujee`, entry point `gurujee = "gurujee.__main__:main"`, pytest config: `asyncio_mode = "auto"`, `testpaths = ["tests"]`, `python_requires = ">=3.11"`
-- [x] T003 Create `requirements.txt` — pin all Phase 1 deps: `openai>=1.0.0`, `textual>=0.47.0`, `rich>=13.0.0`, `cryptography>=41.0.0`, `PyYAML>=6.0`, `ruamel.yaml>=0.18.0`, `tenacity>=8.2.0`, `elevenlabs>=1.0.0`, `faster-whisper>=1.0.0`, `pytest>=7.4.0`, `pytest-asyncio>=0.23.0`, `pytest-cov>=4.1.0`, `responses>=0.25.0`
-- [x] T004 [P] Create `.gitignore` — exclude `data/`, `*.keystore`, `*.log`, `__pycache__/`, `.pytest_cache/`, `*.pyc`, `.coverage`, `htmlcov/`, `dist/`, `*.egg-info/`
-- [x] T005 [P] Create `config/models.yaml` — `default: nova-fast`, `available: [nova-fast, gemini-fast, gemini-search, openai-fast, grok, mistral]`, `endpoint.base_url: "https://gen.pollinations.ai/v1"`, `endpoint.api_key: ""`
-- [x] T006 [P] Create `config/agents.yaml` — heartbeat: `ping_interval_seconds: 30`, `response_timeout_seconds: 5`, `max_restart_attempts: 10`; memory: `short_term_max_turns: 10`, `long_term_max_results: 5`, `backup_interval_days: 7`; logging: `max_bytes: 5242880`, `backup_count: 3`
-- [x] T007 [P] Create `config/voice.yaml` — voice provider config: `provider: elevenlabs`, `model: eleven_turbo_v2`, `streaming: true`, `sample_rate: 22050`, `voice_id: null` (populated at runtime from keystore); this file is version-controlled, never contains actual credentials
-- [x] T008 [P] Create `agents/soul_identity.yaml` — default GURUJEE identity template (this is the SHIPPED template; runtime copy lives at `data/soul_identity.yaml`): name, tagline, personality_traits list, language_style, system_prompt_template with `{name}` `{date}` `{user_name}` `{traits_joined}` placeholders, `voice_id: null`, `user_name: null`, created_at, version: 1; use ruamel.yaml-compatible block style strings
-- [x] T009 [P] Create `install.sh` — idempotent Termux bootstrap: `#!/data/data/com.termux/files/usr/bin/bash` shebang; `pkg update && pkg upgrade -y`, `pkg install -y python git`; `git clone / git pull` (detect existing install via `[ -d .git ]`); `pip install -r requirements.txt`; launch `python -m gurujee.setup`; `chmod +x install.sh` at top of script; all operations check exit codes
+- [X] T001 Create full directory tree per plan.md: `gurujee/`, `agents/`, `config/`, `data/`, `tests/`, `launcher/`, `gurujee/server/static/`, `gurujee/automation/actions/`
+- [X] T002 Write `pyproject.toml` with package metadata, pytest config (asyncio_mode=auto, testpaths=tests, cov target 70%), and dependency list matching requirements.txt
+- [X] T003 [P] Update `requirements.txt` — add `fastapi>=0.110`, `uvicorn>=0.29`, `httpx>=0.25`, `python-multipart>=0.0.9` alongside existing deps
+- [X] T004 [P] Write `.gitignore` — exclude `data/`, `*.keystore`, `*.log`, `__pycache__/`, `*.pyc`, `.env`, `launcher/bin/`, `launcher/.buildozer/`
+- [X] T005 [P] Write `config/models.yaml` — AI model catalogue: endpoint `https://gen.pollinations.ai/v1`, models list: `nova-fast`, `gemini-fast`, `gemini-search`, `openai-fast`, `grok`, `mistral`; default: `nova-fast`
+- [X] T006 [P] Write `config/agents.yaml` — heartbeat interval: 30s, ping timeout: 5s, max restart count: 10, memory short_term_maxlen: 10, log rotation: 5MB×3
+- [X] T007 [P] Write `config/voice.yaml` — provider: elevenlabs, model: turbo, streaming: true, sample_duration_seconds: 30
+- [X] T008 [P] Write `config/automation.yaml` — shizuku_rish_path: `/data/user/0/moe.shizuku.privileged.api/rish`, action_timeout_seconds: 10, screenshot_path: `/data/data/com.termux/files/home/gurujee_screenshot.png`
+- [X] T009 [P] Write `agents/soul_identity.yaml` — template: name GURUJEE, tagline, personality_traits, language_style, system_prompt_template with `{name}` `{user_name}` `{date}` `{traits_joined}` placeholders, voice_id: null
+- [X] T010 Write `tests/conftest.py` — fixtures: `tmp_data_dir`, `mock_message_bus`, `mock_ai_client` (returns fixed stream), `mock_keystore`, `async_client` (httpx TestClient for FastAPI app), `mock_shizuku_executor`
+
+**Checkpoint**: Repo structure and config files exist. `pytest --collect-only` runs with 0 errors.
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: Core modules that BOTH user stories depend on. No US task begins until this
-phase is complete.
+**Purpose**: Core infrastructure every user story depends on — message bus, BaseAgent, config
+loader, keystore module, SQLite schema, AI client. MUST be 100% complete before any story work.
 
-**⚠️ CRITICAL**: US1 and US2 implementation tasks are blocked until T010–T016 all pass.
+**⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [x] T010 Implement `gurujee/config/loader.py` — `ConfigLoader` class: `load_yaml(path: Path) → dict` (PyYAML safe_load), `load_soul_identity(path: Path)` (ruamel.yaml round-trip, preserves comments), `save_soul_identity(data, path: Path)`, `load_setup_state(path: Path) → dict`, `save_setup_state(data, path: Path)`, `load_user_config(path: Path) → dict` (PyYAML, returns defaults if missing: `{active_model: "nova-fast", active_voice_id: null, tui_theme: "default"}`), `save_user_config(data, path: Path)`, `init_user_config(path: Path)` (writes defaults only if file does not exist); env var overrides: `GURUJEE_DATA_DIR`, `GURUJEE_CONFIG_DIR`, `GURUJEE_LOG_LEVEL`; type hints + docstrings on all methods
-- [x] T011 [P] Implement `gurujee/keystore/keystore.py` — `Keystore(path: Path, pin: str)`: `unlock()` (PBKDF2-HMAC-SHA256, 480k iterations, salt from `android_id` via `settings get secure android_id` subprocess, fallback to `data/.device_salt`), `get(key) → str | None`, `set(key, value)`, `delete(key)`, `lock()` (zeros key bytearray), `is_locked() → bool`, `wipe()` (deletes `path` and `data/.device_salt` — used only by forgot-PIN flow); on-disk: 12-byte nonce + GCM ciphertext + 16-byte tag; atomic write via `os.replace`; PIN lockout: `_attempt_count: int`, `_lockout_until: float | None`; `unlock()` raises `KeystoreError("locked_out", lockout_seconds=N)` if `time.time() < _lockout_until`; after 3 wrong-PIN failures set `_lockout_until = time.time() + 30 * (2 ** (attempt_count - 3))`; `KeystoreError` with codes: `locked`, `invalid_pin`, `locked_out`, `corrupt`, `io_error`; type hints + docstrings
-- [x] T012 [P] Implement `gurujee/agents/base_agent.py` — `MessageType` enum (CHAT_REQUEST, CHAT_CHUNK, CHAT_RESPONSE_COMPLETE, CHAT_ERROR, MEMORY_CONTEXT_REQUEST, MEMORY_CONTEXT_RESPONSE, MEMORY_STORE, MEMORY_STORED, HEARTBEAT_PING, HEARTBEAT_PONG, AGENT_STATUS_UPDATE, SETUP_COMPLETE, SHUTDOWN); `Message` dataclass with id (uuid4 str), from_agent, to_agent, type, payload, timestamp, reply_to, ttl=10; `MessageBus` class with `send(msg: Message)`, `register_agent(name: str, inbox: asyncio.Queue)`, `deregister_agent(name: str)`; `BaseAgent` ABC with `run()`, `handle_message(msg: Message)`, `send(to, type, payload)`, `broadcast(type, payload)`, `register_handler(type, fn)`; type hints + docstrings on all
-- [x] T013 Implement `gurujee/daemon/gateway_daemon.py` — `GatewayDaemon`: `start()` coroutine; `_start_agents()` in order soul(P1)→memory(P2)→heartbeat(P3)→user_agent(P4)→cron(P5) each as `asyncio.create_task(agent.run())`; `_route_message(msg: Message)` delivers to target agent's inbox Queue; `_on_agent_failure(name: str)` triggers heartbeat restart logic; `shutdown(reason: str)` sends SHUTDOWN broadcast and awaits all tasks with 5s timeout; emits AGENT_STATUS_UPDATE to TUI on each state change; `get_agent_statuses() → dict[str, AgentStatus]` for setup wizard polling; type hints + docstrings
-- [x] T014 [P] Implement `gurujee/ai/client.py` — `AIClient(models_config_path: Path, user_config_path: Path)`: loads `config/models.yaml`; reads `active_model` from `data/user_config.yaml` (falls back to `default` in models.yaml if not set); `async stream_chat(messages: list[dict], model: str | None = None) → AsyncGenerator[str, None]`; uses `AsyncOpenAI(base_url=..., api_key="")` with `stream=True`; wraps in `tenacity.AsyncRetrying(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=30), retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)))`; on final failure emits CHAT_ERROR and adds message to `_pending_queue: deque`; `_retry_pending()` called on next successful connection; network allowlist check: raise `AllowlistViolation` for any host not in `{gen.pollinations.ai, api.elevenlabs.io}`; type hints + docstrings
-- [x] T015 [P] Implement `gurujee/__main__.py` — `main()` entry point: parse `--headless` and `--reset` flags; detect first-run (check `data/setup_state.yaml` existence + `completed_at` field); if first-run or `--reset` → `SetupWizard().run()`; else: initialize `Keystore(data/gurujee.keystore, pin="")` (dummy — will be unlocked); call `_prompt_pin(keystore)` with Rich `Prompt.ask("Enter keystore PIN: ", password=True)`; `_prompt_pin` handles `KeystoreError("invalid_pin")` with attempt counter display, `KeystoreError("locked_out")` with countdown, "Forgot PIN?" prompt that calls `keystore.wipe()` + `SetupWizard().run()` after explicit confirmation; once unlocked: if `--headless` → `asyncio.run(GatewayDaemon(keystore).start())`, else → `GurujeeApp(keystore).run()`; configure root logger `RotatingFileHandler("data/boot.log", maxBytes=5_242_880, backupCount=3)`; set `GURUJEE_HEADLESS=1` when `--headless`; type hints + docstrings
-- [x] T016 [P] Create `tests/conftest.py` — pytest fixtures: `mock_bus` (MockMessageBus with `sent_messages: list` capture), `temp_data_dir` (tmp_path with pre-created `data/`, `config/` dirs + copies of `config/models.yaml`, `config/agents.yaml`, `config/voice.yaml`), `fake_soul_yaml` (soul_identity.yaml at temp path from agents/ template), `fake_user_config` (data/user_config.yaml at temp path with `{active_model: "nova-fast"}`), `fake_openai_stream` (responses mock returning 3-chunk SSE for `/v1/chat/completions`), `fake_keystore` (Keystore backed by tmp_path with known test PIN "1234"); all fixtures function-scoped
+MARK_DONEImplement `gurujee/config/loader.py` — `ConfigLoader` class: `load_yaml(path)` (PyYAML), `save_yaml(path, data)`, `load_ruamel(path)` (ruamel.yaml for soul_identity), `save_ruamel(path, data)`, `load_models()`, `load_agents()`, `get_user_config()`, `save_user_config(data)`, `init_user_config()` with defaults; all paths via `pathlib.Path`
+MARK_DONE[P] Implement `gurujee/agents/base_agent.py` — `MessageType` enum (12 types from contracts/message-bus.md: CHAT_REQUEST, CHAT_RESPONSE, CHAT_STREAM_CHUNK, MEMORY_STORE, MEMORY_RETRIEVE, MEMORY_RESULT, HEARTBEAT_PING, HEARTBEAT_PONG, AGENT_STATUS, AGENT_RESTART, AUTOMATE_REQUEST, AUTOMATE_RESULT), `Message` dataclass (id UUID4, from_agent, to_agent, type, payload dict, timestamp, reply_to, ttl=10), `MessageBus` class with `asyncio.Queue` per agent and `send(msg)` / `subscribe(agent_name)` methods, `BaseAgent` ABC with `name`, `inbox: asyncio.Queue`, `bus: MessageBus`, abstract `run()` coroutine, `handle_message(msg)`, `start()`, `stop()` lifecycle methods
+MARK_DONE[P] Implement `gurujee/keystore/keystore.py` — `Keystore` class per contracts/keystore-api.md: `__init__(path, data_dir)`, `create(pin)` derives 32-byte key via PBKDF2-HMAC-SHA256 (iterations=480_000, salt=device_fingerprint[:16] fallback to `.device_salt`), encrypts empty JSON blob with AES-256-GCM (nonce 12B ‖ ciphertext ‖ tag 16B), `unlock(pin)` with 3-attempt lockout + 30s exponential backoff, `lock()` zeroes key bytearray, `get(key)`, `set(key, value)`, `wipe()`, `is_locked` property; PIN never stored; raw binary on-disk format
+MARK_DONEImplement `gurujee/memory/long_term.py` — `LongTermMemory` class: `init_db(path)` creates tables `memories`, `automation_log`, `notification_cache` with all columns per data-model.md, enables WAL mode, creates all indices; `store_memory(content, tags, category, importance, source)`, `retrieve_memories(query, limit=5)` using ADR-002 hybrid SQL; `log_automation(command_type, input_text, action_json, status, error_message, duration_ms)`, `prune_automation_log(max_entries=500)`; `cache_notifications(notifs)`, `get_notifications(limit=20)`, `prune_notification_cache(max_entries=100)`; `backup(backups_dir)` weekly copy with timestamp; `handle_corruption(path)` renames to `.corrupt.<timestamp>` and returns fresh path
+MARK_DONE[P] Implement `gurujee/memory/short_term.py` — `ShortTermMemory` class: `deque(maxlen=10)` of `ConversationTurn` dataclasses (role, content, timestamp); `add(role, content)`, `to_messages()` → list of `{"role": ..., "content": ...}` dicts for OpenAI API; `serialize(path)` → YAML to `data/session_context.yaml`; `deserialize(path)` on startup; `summarize_to_long_term(long_term_memory)` called when context limit approached
+MARK_DONEImplement `gurujee/ai/client.py` — `AIClient` class: `__init__(config_loader, keystore)`, `AsyncOpenAI(base_url="https://gen.pollinations.ai/v1", api_key="")`, `_active_model()` reads from `data/user_config.yaml`; `stream_chat(messages, on_chunk)` async generator using `client.chat.completions.create(stream=True)` with tenacity retry (3 attempts, 2s wait, on `openai.APIConnectionError`); network allowlist check before every call (only `gen.pollinations.ai` and `api.elevenlabs.io` permitted); `AUTOMATE` tool call support: parse `tool_calls` from stream chunks; queue pending requests on unreachable endpoint and auto-retry when connection restores
+MARK_DONEWrite `tests/test_keystore.py` — test create+unlock roundtrip, wrong PIN lockout (3 attempts → 30s), forgot-PIN wipe, key derivation determinism, in-memory-only key after unlock, wipe removes file
+MARK_DONE[P] Write `tests/test_ai_client.py` — mock `AsyncOpenAI` responses fixture; test streaming chunks delivered in order, retry on connection error (3 attempts), allowlist blocks unknown host, active model read from config, tool_calls parsed from stream
 
-**Checkpoint**: Phase 2 complete when `pytest tests/conftest.py -v` passes with no import errors.
+**Checkpoint**: Foundation complete. `pytest tests/test_keystore.py tests/test_ai_client.py` passes. `from gurujee.agents.base_agent import BaseAgent, MessageBus, Message, MessageType` imports cleanly.
 
 ---
 
-## Phase 3: User Story 1 — Guided Setup and Onboarding (Priority: P1) 🎯 MVP
+## Phase 3: User Story 1 — First-Time Setup and Onboarding (Priority: P1) 🎯 MVP Entry Gate
 
-**Goal**: A new user can run `install.sh` on a fresh Android device and GURUJEE is fully
-configured and running within 10 minutes, without external documentation.
+**Goal**: User (technical: `install.sh`; non-technical: Launcher APK) completes full guided setup
+and GURUJEE reaches "ready" state with all daemons running and `localhost:7171/health` responding.
 
-**Independent Test**: Run `python -m gurujee.setup --reset` on fresh Termux. Interrupt after
-step 3, relaunch — verify it resumes at step 4. Complete all 8 steps. Verify
-`data/setup_state.yaml` has `completed_at` set, `~/.termux/boot/start-gurujee.sh` exists and
-is executable, `data/gurujee.keystore` exists, `data/user_config.yaml` has `active_model` set,
-`data/soul_identity.yaml` exists.
+**Independent Test**: Run `python -m gurujee.setup` on a clean `data/` directory. Verify
+`data/setup_state.yaml` reaches `completed_at: <timestamp>` with all required steps marked
+`completed: true`. Then run `python -m gurujee --headless` and verify `GET /health` → `{"status":"ready"}`.
 
-### Tests for US1 ⚠️ Write first — confirm they FAIL before T019
+### Implementation for User Story 1
 
-- [x] T017 [P] [US1] Write `tests/test_setup_wizard.py` — test wizard resumes from last completed step (inject partial `setup_state.yaml` with steps 1–3 complete; verify wizard starts at step 4); test `_step_keystore_pin()` writes keystore and marks step complete; test voice_sample step skipped when user inputs "n" at consent prompt and marks `skipped: true`; test `_step_accessibility_apk()` rejects APK with wrong SHA-256 and does NOT mark step complete; test `_step_daemons()` writes `~/.termux/boot/start-gurujee.sh` with correct content + executable bit; test full happy-path run writes `completed_at` to `setup_state.yaml`; test `_step_ai_model()` writes `active_model` to `data/user_config.yaml`
-- [x] T018 [P] [US1] Write `tests/test_keystore.py` — test unlock→get→set→lock→unlock→get round-trip with PIN "1234"; test wrong PIN raises `KeystoreError("invalid_pin")`; test 3 wrong PINs raises `KeystoreError("locked_out")` on 4th attempt; test lockout duration is ≥ 30 seconds; test `lock()` prevents `get()` (raises `KeystoreError("locked")`); test `wipe()` deletes keystore file; test atomic write: partial write does not corrupt existing keystore; test `android_id` unavailable → falls back to `data/.device_salt`; test corrupt file raises `KeystoreError("corrupt")`
+- [X] T019 [US1] Implement `gurujee/setup/wizard.py` — `SetupWizard` class with `run()` entry point; loads/creates `data/setup_state.yaml` on start; skips already-completed steps; 8 steps as methods: `_step_packages()` (`pkg install -y python git termux-api` via subprocess), `_step_shizuku()` (activation instructions + `rish` binary verification), `_step_accessibility_apk()` (GitHub Releases URL + SHA-256 display + download + verify + `am start` sideload; skippable), `_step_permissions()` (`termux-setup-storage` + guided Android permission grants with re-check), `_step_keystore_pin()` (PIN prompt 4–8 digits, confirm, display "Forgot PIN" consequence, `Keystore.create(pin)`; cannot skip), `_step_ai_model()` (model list from `config/models.yaml`, writes to `data/user_config.yaml`), `_step_voice_sample()` (consent prompt → `termux-microphone-record` → ElevenLabs → store voice_id in keystore → discard audio; skippable), `_step_daemons()` (create `~/.termux/boot/start-gurujee.sh`, start daemon subprocess, poll `localhost:7171/health` max 60s)
+- [X] T020 [US1] Implement `gurujee/__main__.py` — argparse: `--headless` (default, runs daemon + server), `--tui` (adds Textual), `--setup` (runs wizard only); PIN prompt on every launch after setup via `Keystore.unlock(pin)` before daemon start; calls `asyncio.run(GatewayDaemon().start())` for headless mode
+- [X] T021 [US1] Update `install.sh` — idempotent bootstrap: `pkg update -y && pkg upgrade -y`, `pkg install -y python git termux-api`, clone/pull repo, `pip install -r requirements.txt`, check `data/setup_state.yaml` for completion, if not complete run `python -m gurujee.setup`, if complete run `python -m gurujee --headless`
+- [X] T022 [US1] Write `tests/test_setup_wizard.py` — mock `subprocess`, mock ElevenLabs call, mock keystore; test: fresh start runs all 8 steps, interrupted setup resumes from last step, voice sample step skipped when declined, setup_state.yaml written correctly after each step, PIN step cannot be skipped
 
-### Implementation for US1
-
-- [x] T019 [US1] Implement `gurujee/setup/wizard.py` — `SetupWizard` class: `run()` entry; `_load_state() → dict` (loads `data/setup_state.yaml` or returns blank 8-step state); `_save_state(state)` (writes via ConfigLoader); `_step_runner(step_name, fn, required=True)` (skip if already `completed: true`; mark complete + set `completed_at` on success; handle `skipped: true` for optional steps); Rich `Progress` + `Console` for all output; `STEPS = ["packages", "shizuku", "accessibility_apk", "permissions", "keystore_pin", "ai_model", "voice_sample", "daemons"]`; type hints + docstrings
-- [x] T020 [US1] Implement `SetupWizard._step_packages()` in `gurujee/setup/wizard.py` — `subprocess.run(["pkg", "update", "-y"])`, then `subprocess.run(["pkg", "install", "-y", "python", "git"])`, then `subprocess.run(["pip", "install", "-r", "requirements.txt"])`; display Rich progress bar per group; on non-zero exit: print error + `Prompt.ask("Retry? [y/n]")`; raise `SetupStepError("packages_failed")` on repeated failure; specific exception types only (no bare except)
-- [x] T021 [US1] Implement `SetupWizard._step_accessibility_apk()` in `gurujee/setup/wizard.py` — display exact GitHub Releases URL and expected SHA-256 via Rich Panel; `urllib.request.urlretrieve(url, "/tmp/gurujee-accessibility.apk")`; compute sha256 of downloaded file; raise `SetupStepError("sha256_mismatch")` if mismatch and do not proceed; `subprocess.run(["pm", "install", "/tmp/gurujee-accessibility.apk"])`; save verified checksum to `steps.accessibility_apk.apk_sha256` in `setup_state.yaml`; `os.unlink("/tmp/gurujee-accessibility.apk")` after install
-- [x] T022 [US1] Implement `SetupWizard._step_keystore_pin()` in `gurujee/setup/wizard.py` — display Rich Panel: "Choose a 4–8 digit PIN for your keystore. This PIN is NEVER stored — it is the only way to decrypt your credentials. **If you forget your PIN, your keystore must be wiped and all credentials re-entered.**"; `Prompt.ask("PIN (4–8 digits): ", password=True)` + `Prompt.ask("Confirm PIN: ", password=True)` with length validation; on mismatch: re-prompt (max 3 tries); instantiate `Keystore(data/gurujee.keystore, pin=pin)`; `keystore.unlock()` (creates new keystore if file absent); set empty initial entries via `keystore.set()`; `keystore.lock()`; save `pin_set: true` to `setup_state.yaml keystore_pin step`; never log or store the PIN string
-- [x] T023 [US1] Implement `SetupWizard._step_ai_model()` in `gurujee/setup/wizard.py` — load `config/models.yaml` via ConfigLoader; display model list in a Rich Table with model names and descriptions; `Prompt.ask("Choose model (default: nova-fast): ")` with validation against available list; call `ConfigLoader.init_user_config(data/user_config.yaml)`; call `ConfigLoader.save_user_config({active_model: chosen_model, ...}, data/user_config.yaml)`; confirm selection to user; type hints + docstrings
-- [x] T024 [US1] Implement `SetupWizard._step_voice_sample()` in `gurujee/setup/wizard.py` — display Rich Panel with 3-part consent: purpose ("Your voice will be cloned via ElevenLabs to power GURUJEE's call features in Phase 2"), retention ("The raw recording is deleted from your device immediately after upload"), deletion right ("You can remove your voice clone at any time via Settings"); `Confirm.ask("I consent and want to record now. Continue?")` — if "n": mark step `skipped: true` and return; `subprocess.run(["termux-microphone-record", "-l", "30", "-f", "/tmp/voice_sample.wav"])`; upload WAV to ElevenLabs instant clone API; unlock keystore with PIN re-prompt; `keystore.set("voice_id", returned_voice_id)`; `keystore.lock()`; `os.unlink("/tmp/voice_sample.wav")`; verify file deleted (raise if still exists) before marking step complete
-- [x] T025 [US1] Implement `SetupWizard._step_daemons()` in `gurujee/setup/wizard.py` — copy `agents/soul_identity.yaml` → `data/soul_identity.yaml` using `shutil.copy2` (only if `data/soul_identity.yaml` does not already exist); initialise `data/user_config.yaml` defaults if not present via `ConfigLoader.init_user_config()`; instantiate `GatewayDaemon` and start in background thread; poll `daemon.get_agent_statuses()` for up to 10s until all 5 agents reach RUNNING; display Rich spinner during wait; write `~/.termux/boot/start-gurujee.sh`: `#!/data/data/com.termux/files/usr/bin/bash`, `sleep 5`, `cd <install_dir>`, `python -m gurujee --headless >> data/boot.log 2>&1 &`; `os.chmod(boot_script, 0o755)`; print confirmation with path
-
-**Checkpoint**: US1 complete and independently testable.
-Run: `python -m gurujee --reset && python -m gurujee.setup` — all 8 steps pass,
-`data/setup_state.yaml` has `completed_at` set, `data/soul_identity.yaml` exists,
-`data/user_config.yaml` has `active_model`, boot script exists and is executable.
+**Checkpoint (US1)**: `python -m gurujee.setup` completes on clean data dir. `data/setup_state.yaml` shows all required steps complete. `GET http://localhost:7171/health` → `{"status":"ready"}`.
 
 ---
 
 ## Phase 4: User Story 2 — Conversational AI Companion with Persistent Memory (Priority: P1)
 
-**Goal**: User can chat with GURUJEE, which responds with personality and streaming tokens,
-remembers facts across sessions, and retrieves them correctly in future conversations.
+**Goal**: User sends a message. GURUJEE responds with its defined personality, remembers facts
+across sessions, queues messages when offline, and streams responses in real time.
 
-**Independent Test**: Start GURUJEE. Tell it: "My daughter's name is Fatima." Exit.
-Restart (enter PIN). Ask: "What is my daughter's name?" — GURUJEE must answer "Fatima".
-Interrupt a response mid-stream — verify `[interrupted]` suffix appears and fact is still
-saved. Verify idle RAM < 50 MB via `ps aux | grep gurujee`.
+**Independent Test**: `POST /chat {"message":"My son's name is Ali"}` → streaming response.
+Stop daemon. Start daemon. `POST /chat {"message":"Do you remember my son's name?"}` → response
+contains "Ali".
 
-### Tests for US2 ⚠️ Write first — confirm they FAIL before T031
+### Implementation for User Story 2
 
-- [x] T026 [P] [US2] Write `tests/test_soul_agent.py` — test system prompt contains `{name}`, `{date}`, `{user_name}` filled from `data/soul_identity.yaml`; test CHAT_REQUEST triggers MEMORY_CONTEXT_REQUEST (captured via mock_bus); test CHAT_CHUNK messages emitted per streaming token (mock AIClient returns 3 chunks); test CHAT_RESPONSE_COMPLETE emitted after final chunk with assembled `full_text`; test MEMORY_STORE emitted with full exchange after response complete; test CHAT_ERROR emitted when AIClient raises after retries exhausted
-- [x] T027 [P] [US2] Write `tests/test_memory_agent.py` — test `LongTermMemory.insert()` writes row to SQLite; test `LongTermMemory.search("daughter")` returns record tagged "person"; test `ShortTermMemory` deque drops turn 1 when 11th turn added (maxlen=10); test MEMORY_CONTEXT_REQUEST → response contains `recent_turns` (≤10) and `long_term_facts` (≤5); test `explicit` source sets `importance=1.0`; test `backup_weekly()` creates `data/backups/memory_YYYYMMDD.db`; test corrupted DB → fresh empty DB created + AGENT_STATUS_UPDATE emitted
-- [x] T028 [P] [US2] Write `tests/test_heartbeat_agent.py` — test HEARTBEAT_PING broadcast sent every 30s (mock asyncio.sleep); test agent missing PONG after 5s timeout → `_request_restart("agent_name")` called; test AGENT_STATUS_UPDATE(status=ERROR) emitted when restart requested; test restart_count increments in AgentState; test HEARTBEAT_PONG with "degraded" payload logged at WARNING but not treated as failure
-- [x] T029 [P] [US2] Write `tests/test_ai_client.py` — test `stream_chat()` yields tokens as async generator (responses mock SSE); test ConnectError → retried 3× with exponential backoff; test all retries exhausted → CHAT_ERROR emitted + message added to `_pending_queue`; test `_retry_pending()` sends queued message on next successful call; test non-allowlisted host raises `AllowlistViolation`; test `active_model` read from `data/user_config.yaml` (not hardcoded); test model override arg takes precedence over user_config value
+- [X] T023 [US2] Implement `gurujee/agents/soul_agent.py` — `SoulAgent(BaseAgent)`: loads `data/soul_identity.yaml` (initialises from `agents/soul_identity.yaml` template on first run); builds system prompt from `system_prompt_template` with `{name}`, `{user_name}`, `{date}`, `{traits_joined}` substitution; handles `CHAT_REQUEST`: injects system prompt + short-term context, calls `AIClient.stream_chat()`, publishes `CHAT_STREAM_CHUNK` per token and final `CHAT_RESPONSE`; detects "remember" intent and publishes `MEMORY_STORE`; on endpoint unreachable: publishes error chunk, queues request, auto-retries
+- [X] T024 [US2] Implement `gurujee/agents/memory_agent.py` — `MemoryAgent(BaseAgent)`: initialises `ShortTermMemory` and `LongTermMemory` on start; loads `data/session_context.yaml` if exists; handles `MEMORY_STORE` (writes to SQLite, publishes confirmation); handles `MEMORY_RETRIEVE` (keyword/tag query, publishes `MEMORY_RESULT`); on every `CHAT_REQUEST` prepends relevant memories; on `CHAT_RESPONSE` appends to deque, calls `summarize_to_long_term()` if context limit near; serialises short-term on `stop()`; schedules weekly backup via asyncio task
+- [X] T025 [US2] Implement `gurujee/agents/heartbeat_agent.py` — `HeartbeatAgent(BaseAgent)`: every 30s sends `HEARTBEAT_PING` to each always-on agent; awaits `HEARTBEAT_PONG` within 5s; on timeout publishes `AGENT_RESTART` to gateway; logs restart events to `data/heartbeat.log` via `RotatingFileHandler(5MB×3)`
+- [X] T026 [US2] Implement `gurujee/agents/user_agent.py` — `UserAgent(BaseAgent)`: reads `user_name` and `user_profile` from `data/soul_identity.yaml` (ruamel.yaml); publishes user profile on startup for SoulAgent name injection; handles profile update messages from Settings
+- [X] T027 [US2] Implement `gurujee/agents/cron_agent.py` — `CronAgent(BaseAgent)`: Phase 1 dormant; loads `data/cron_jobs.yaml` (empty list); exposes `add_job(job_dict)` and `list_jobs()` via MessageBus; logs startup as dormant; no jobs scheduled in Phase 1
+- [X] T028 [US2] Implement `gurujee/daemon/gateway_daemon.py` — `GatewayDaemon`: `__init__` creates `MessageBus`, instantiates all 6 agents; `start()` coroutine: unlocks keystore, starts uvicorn server task, starts all agent tasks via `asyncio.create_task()`, runs message routing loop; `_route_message(msg)` delivers to correct agent inbox or broadcasts; `_on_agent_failure(name, exc)` triggers heartbeat restart; `stop()` gracefully cancels all tasks; exposes `agent_states` dict and `ready: bool` flag for `/health` and `/agents` endpoints
+- [X] T029 [US2] Write `tests/test_soul_agent.py` — mock MessageBus + AIClient; test: system prompt injected with name/date/traits, CHAT_REQUEST triggers stream, "remember" intent triggers MEMORY_STORE, stream interrupted → [interrupted] suffix published, endpoint unreachable → error chunk + request queued
+- [X] T030 [P] [US2] Write `tests/test_memory_agent.py` — test: explicit remember written to SQLite, cross-session recall (deserialise session_context.yaml), context summarisation triggered at limit, weekly backup scheduled (mock asyncio), corrupted DB handled gracefully
+- [X] T031 [P] [US2] Write `tests/test_heartbeat_agent.py` — test: ping sent to all agents every 30s, AGENT_RESTART published on pong timeout (5s), restart logged to heartbeat.log
 
-### Implementation for US2
-
-- [x] T030 [US2] Implement `gurujee/memory/short_term.py` — `ConversationTurn` dataclass: role (str), content (str), timestamp (datetime); `ShortTermMemory`: `add_turn(role, content)` appends to `deque(maxlen=10)`; `get_recent(n=10) → list[dict]` returns `[{role, content}]`; `serialize(path: Path)` writes turns to YAML via PyYAML; `load(path: Path)` restores deque from YAML (tolerates missing file — returns empty deque); type hints + docstrings
-- [x] T031 [US2] Implement `gurujee/memory/long_term.py` — `MemoryRecord` dataclass (id, content, tags, category, importance, created_at, source); `LongTermMemory(db_path: Path)`: `init_db()` creates `memories` table (schema per data-model.md), `PRAGMA journal_mode=WAL`, `CREATE INDEX idx_tags ON memories(tags)`; `insert(content, tags, category, importance=0.5, source="conversation") → MemoryRecord`; `search(query_text: str) → list[MemoryRecord]` (split query into keywords; SQL hybrid retrieval: `WHERE tags LIKE '%keyword%' ORDER BY importance*2 + 1.0/(julianday('now')-julianday(created_at)+1) DESC LIMIT 5`); `backup_weekly(backups_dir: Path)` — skip if backed up within 7 days, else `shutil.copy2`; `handle_corrupt(path: Path)` — rename to `.corrupt.<timestamp>`, create fresh DB; type hints + docstrings
-- [x] T032 [US2] Implement `gurujee/agents/soul_agent.py` — `SoulAgent(name="soul")`: `run()` loop on inbox Queue; `_load_soul(path: Path)` via ConfigLoader reading `data/soul_identity.yaml`; `_build_system_prompt(user_name, date, recent_turns, long_term_facts) → str` (fills template placeholders); handles `CHAT_REQUEST`: sends `MEMORY_CONTEXT_REQUEST` → awaits `MEMORY_CONTEXT_RESPONSE` with 2s timeout → builds prompt → calls `AIClient.stream_chat()` → emits `CHAT_CHUNK` per token → on done emits `CHAT_RESPONSE_COMPLETE(full_text, is_interrupted=False)` + `MEMORY_STORE`; on `httpx.ConnectError` mid-stream: emits `CHAT_RESPONSE_COMPLETE(partial_text + " [interrupted]", is_interrupted=True)` + `MEMORY_STORE(partial_text, source="conversation")`; handles `SHUTDOWN`; type hints + docstrings
-- [x] T033 [US2] Implement `gurujee/agents/memory_agent.py` — `MemoryAgent(name="memory")`: `run()` loop; initialises `LongTermMemory(data/memory.db)` + `ShortTermMemory()`; calls `long_term.init_db()` (creates or validates schema); loads `data/session_context.yaml` if exists; handles `MEMORY_CONTEXT_REQUEST` → extract keywords from `query_text` → `long_term.search()` → returns `MEMORY_CONTEXT_RESPONSE(recent_turns, long_term_facts)`; handles `MEMORY_STORE` → `long_term.insert()` + `short_term.add_turn()` → emits `MEMORY_STORED`; on `SHUTDOWN` → `short_term.serialize(data/session_context.yaml)`; `asyncio.create_task(_schedule_backup())` on startup; type hints + docstrings
-- [x] T034 [US2] Implement `gurujee/agents/heartbeat_agent.py` — `HeartbeatAgent(name="heartbeat")`: `run()` coroutine; `_ping_loop()`: every 30s sends `HEARTBEAT_PING` broadcast with unique `ping_id`; `_pending_pings: dict[str, set[str]]` tracks agents without pong; `asyncio.wait_for(pong_event, timeout=5.0)` per agent; on timeout: `await self.send("gateway", MessageType.AGENT_STATUS_UPDATE, {name, status="ERROR", reason="pong_timeout"})`; handles `HEARTBEAT_PONG`: removes from `_pending_pings`; logs to `data/heartbeat.log` via `RotatingFileHandler(maxBytes=5_242_880, backupCount=3)`; type hints + docstrings
-- [x] T035 [US2] Implement `gurujee/agents/user_agent.py` — `UserAgent(name="user_agent")`: `run()` loop; loads `user_name` from `data/soul_identity.yaml` top-level `user_name` field (add `user_name: null` to the template in `agents/soul_identity.yaml`); handles `USER_PROFILE_REQUEST` → returns `USER_PROFILE_RESPONSE(user_name=user_name)`; handles `SHUTDOWN`; type hints + docstrings
-- [x] T036 [US2] Implement `gurujee/agents/cron_agent.py` — `CronAgent(name="cron")`: `run()` loop; loads `data/cron_jobs.yaml` (`jobs: []`); logs "cron: 0 active jobs (Phase 1 dormant)" at INFO on startup; `add_job(job: CronJob) → str` and `list_jobs() → list[CronJob]` callable from gateway; `CronJob` dataclass (id, description, cron_expr, action_type, action_payload, active, created_at, last_run, next_run — all fields from data-model.md); handles `SHUTDOWN`; type hints + docstrings
-- [x] T037 [US2] Implement `gurujee/tui/theme.py` — module-level constants: `BG = "#0a0a0a"`, `PRIMARY_AMBER = "#f0a500"`, `ACCENT_ORANGE = "#ff6b00"`, `TEXT_PRIMARY = "#e0e0e0"`, `TEXT_DIM = "#666666"`; `GURUJEE_CSS: str` Textual global stylesheet applying BG to Screen, PRIMARY_AMBER to focused borders + buttons, ACCENT_ORANGE to active indicators, TEXT_DIM to disabled/stub labels; type hints + docstrings
-- [x] T038 [US2] Implement `gurujee/tui/screens/chat_screen.py` — `ChatScreen(Screen)`: `RichLog(id="chat-log", auto_scroll=True, markup=True)` for history; `Input(placeholder="Message GURUJEE...", id="chat-input")` at bottom; `_streaming_message_id: str | None` tracks the in-progress bubble; `on_input_submitted(event)`: clear input, append user turn in TEXT_PRIMARY, send `CHAT_REQUEST` to gateway via `app.post_message()`; `on_chat_chunk(event)`: if first chunk → write opening bubble with amber blinking cursor `"[bold amber]●[/] "` + token; subsequent chunks → append token in-place via `log.markup`; `on_chat_error(event)`: append error row in red + `"(Will retry automatically)"` if `queued=True`; `on_chat_response_complete(event)`: remove cursor indicator, finalise amber color; if `event.is_interrupted` → append `" [interrupted]"` in TEXT_DIM after partial text; type hints + docstrings
-- [x] T039 [US2] Implement `gurujee/tui/screens/agent_status_screen.py` — `AgentStatusScreen(Screen)`: `DataTable(id="agent-table")` with columns: Name, Status, Restarts, Last Error; `compose()` populates table with 5 agent names at STARTING; `on_agent_status_update(event)`: update matching row, flash row in PRIMARY_AMBER on state change; `action_back()` bound to Escape key; type hints + docstrings
-- [x] T040 [US2] Implement `gurujee/tui/screens/settings_screen.py` — `SettingsScreen(Screen)`: section "Identity" → `Input` pre-filled with `soul.name` from `data/soul_identity.yaml`, on Submit: `ConfigLoader.save_soul_identity(updated, data/soul_identity.yaml)`; section "AI Model" → `Select` populated from `config/models.yaml available[]`, on change: `ConfigLoader.save_user_config({active_model: selected}, data/user_config.yaml)`; section "Calls" (Phase 2 stub) → `Label("Auto-Answer: Coming in Phase 2", classes="dim")`; section "SMS" (Phase 2 stub) → `Label("SMS Auto-Reply: Coming in Phase 2", classes="dim")`; type hints + docstrings
-- [x] T041 [US2] Implement `gurujee/tui/app.py` — `GurujeeApp(App, keystore: Keystore)`: `CSS = GURUJEE_CSS` from theme.py; `SCREENS = {"chat": ChatScreen, "agents": AgentStatusScreen, "settings": SettingsScreen}`; `on_mount()`: push ChatScreen; `self.run_worker(self._start_daemon, thread=False)`; `_start_daemon()` coroutine: `GatewayDaemon(self._keystore)` → `daemon.start()`; `BINDINGS`: `"a" → agents screen`, `"s" → settings screen`, `"escape" → pop_screen`, `"ctrl+c" → quit`; `handle_exception(exc)`: log to `data/boot.log` + `self.notify(str(exc), severity="error")` — do NOT re-raise (Textual crash must not kill daemon); type hints + docstrings
-
-**Checkpoint**: US2 complete and independently testable.
-Run: `python -m gurujee` → chat opens, tell it a fact, exit, re-run, enter PIN, verify recall.
-Run: `ps aux | grep gurujee` → verify RSS < 50 MB.
+**Checkpoint (US2)**: Tell GURUJEE "My son's name is Ali". Stop daemon. Start daemon. Ask "Do you remember my son's name?" — answer must contain "Ali". `GET /agents` shows all 6 agents RUNNING.
 
 ---
 
-## Phase 5: Polish & Cross-Cutting Concerns
+## Phase 5: User Story 3 — FastAPI Server + PWA Chat UI (Priority: P1)
 
-**Purpose**: Quality gates, compliance verification, and documentation finalization.
-All US1 + US2 implementation MUST be complete before this phase.
+**Goal**: Non-technical user opens a WhatsApp-style chat interface in a WebView or browser.
+Messages stream token-by-token. Agent status visible in a subtle status bar. Works offline
+after first load via service worker.
 
-- [x] T042 [P] Add `logging.getLogger(__name__)` + `RotatingFileHandler` to all production modules — `gurujee/agents/soul_agent.py`, `memory_agent.py`, `heartbeat_agent.py`, `user_agent.py`, `cron_agent.py`, `gurujee/daemon/gateway_daemon.py`; confirm zero `print()` in production code: `grep -rn "print(" gurujee/`
-- [x] T043 [P] P10 compliance pass — `grep -rn "except Exception\|except:\|except BaseException" gurujee/` and replace with specific exception types; `grep -rn "os\.path\.join\|str(.*Path" gurujee/` and replace with `pathlib.Path`; `python -m mypy gurujee/ --ignore-missing-imports` and fix obvious type errors; `grep -rn "soul_identity" gurujee/` and confirm all references use `data/soul_identity.yaml` (not `agents/`)
-- [x] T044 Run `pytest tests/ --cov=gurujee --cov-report=term-missing -v` — identify agent files below 70% coverage; add targeted unit tests for uncovered branches: corrupt DB, wrong PIN, locked_out keystore, endpoint outage, agent restart, [interrupted] stream path
-- [x] T045 [P] Manual TUI render test — run `COLUMNS=80 python -m gurujee`; verify Chat screen, Agent Status screen, and Settings screen all render without overflow or truncation at 80 columns; document any layout fixes in `gurujee/tui/screens/`
-- [x] T046 [P] Verify `install.sh` idempotency — run `bash install.sh` twice on a clean environment; confirm second run exits cleanly, no duplicate errors, no data overwritten
-- [x] T047 [P] Create `data/.gitignore` — `*.db`, `*.keystore`, `*.log`, `*.yaml`, `*.db.corrupt.*`; but keep `backups/.gitkeep`; verify `git status` shows no `data/` files tracked
-- [x] T048 [P] Update `specs/001-gurujee-foundation/data-model.md` — add `keystore_pin` step to SetupState schema (after `permissions`, before `ai_model`); update Soul entity path from `agents/soul_identity.yaml` to `data/soul_identity.yaml`; add `UserConfig` entry (`data/user_config.yaml`: active_model, active_voice_id, tui_theme)
-- [x] T049 Update `specs/001-gurujee-foundation/quickstart.md` — reflect 8-step wizard, canonical config/data paths, PIN prompt at launch, `data/user_config.yaml`; verify all commands work against implemented codebase
+**Independent Test**: Open `http://localhost:7171` in Chrome. Type a message. See streaming
+response in chat bubbles. Disable network. Reload — PWA loads from service worker cache.
+
+### Implementation for User Story 3
+
+- [X] T032 [US3] Implement `gurujee/server/app.py` — `create_app(gateway: GatewayDaemon) → FastAPI`: creates FastAPI instance, mounts `StaticFiles` at `/static` pointing to `gurujee/server/static/`, registers all routers (chat, agents, automate, notifications, health), registers WebSocket endpoint `/ws`, sets CORS to `127.0.0.1` only, configures `uvicorn.Config(app, host="127.0.0.1", port=7171, loop="asyncio", workers=1)` and starts `Server.serve()` as asyncio task from `GatewayDaemon`
+- [X] T033 [US3] Implement `gurujee/server/routers/chat.py` — `POST /chat`: accepts `{"message": str}`, publishes `CHAT_REQUEST` to MessageBus, subscribes to `CHAT_STREAM_CHUNK` and `CHAT_RESPONSE` replies, streams via `StreamingResponse(media_type="text/event-stream")`; chunk format: `data: {"chunk": "...", "done": false}\n\n`; final: `data: {"chunk": "", "done": true}\n\n`; error: `data: {"error": "...", "done": true}\n\n`
+- [X] T034 [US3] Implement `gurujee/server/routers/health.py` — `GET /health`: returns `{"status": "ready", "agents": {name: status}}` when GatewayDaemon is fully started; `{"status": "starting"}` during startup; used by Launcher APK to poll readiness
+- [X] T035 [US3] Implement `gurujee/server/routers/agents.py` — `GET /agents`: returns snapshot of all `AgentState` entries from `GatewayDaemon.agent_states` as JSON list `[{"name": str, "status": str, "restart_count": int, "last_error": str|null}]`
+- [X] T036 [US3] Implement `gurujee/server/websocket.py` — `WebSocket /ws`: on connect registers client in `GatewayDaemon.ws_clients` set; on agent status change or automation result broadcasts JSON event to all connected clients; handles `ping`/`pong` keep-alive; removes client on disconnect
+- [X] T037 [US3] Write `gurujee/server/static/index.html` — PWA shell: `<meta name="viewport" content="width=device-width,initial-scale=1">`, dark background `#0a0a0a`, `<div id="status-bar">` (subtle top bar, 28px height), `<div id="chat-container">` (scrollable message list), `<div id="input-area">` (textarea + send button + voice button), `<link rel="manifest" href="manifest.json">`, service worker registration script, `<script src="app.js">`
+- [X] T038 [US3] Write `gurujee/server/static/style.css` — WhatsApp-style dark theme: background `#0a0a0a`, user message bubble `#1a1a2e` right-aligned, assistant bubble `#0d3b2e` left-aligned, automation result bubble `#1e1e3a` centre-aligned, amber accent `#f0a500`, orange `#ff6b00`, `font-family: system-ui`, bubble border-radius 18px, max-width 75%, status bar `background: #111`, mobile-first responsive, no external CSS imports
+- [X] T039 [US3] Write `gurujee/server/static/app.js` — chat logic: `sendMessage()` posts to `/chat` then reads SSE stream via `fetch` + `ReadableStream`; appends tokens to current assistant bubble in real time; shows blinking cursor `|` while streaming; removes cursor on `done: true`; shows `[interrupted]` suffix on error event; `connectWebSocket()` opens `/ws`, handles `agent_status` events to update status bar colour (green=all running, amber=degraded, red=critical); `loadHistory()` from localStorage on page load; no external JS libraries
+- [X] T040 [US3] Write `gurujee/server/static/sw.js` — service worker: `CACHE_NAME = "gurujee-v1"`; on `install`: cache `["/", "/app.js", "/style.css", "/manifest.json"]`; on `fetch`: cache-first for static assets (match by URL), network-first for `/chat`, `/agents`, `/ws` paths (pass through to network, no cache); `skipWaiting()` on activate
+- [X] T041 [US3] Write `gurujee/server/static/manifest.json` — `name: "GURUJEE"`, `short_name: "GURUJEE"`, `start_url: "/"`, `display: "standalone"`, `background_color: "#0a0a0a"`, `theme_color: "#f0a500"`, `icons: [{src:"icon-192.png", sizes:"192x192"}, {src:"icon-512.png", sizes:"512x512"}]`
+- [X] T042 [US3] Write `tests/test_server_chat.py` — use `httpx.AsyncClient(app=app, base_url="http://test")`; test: POST /chat streams SSE chunks in `data: {...}` format, `done:true` terminates stream, error response format on agent unavailable, GET /health returns `{"status":"ready"}` after daemon start, GET /agents returns list with 6 entries, WebSocket /ws receives agent_status event on mock status change
+
+**Checkpoint (US3)**: Open `http://localhost:7171` in browser. Send "Hello". See streaming chat bubbles. Refresh with network disabled — page loads from service worker. Status bar shows agents running.
+
+---
+
+## Phase 6: User Story 4 — Shizuku Device Automation (Priority: P1)
+
+**Goal**: User says "open WhatsApp", "set volume to 50%", "turn WiFi off", "what are my
+notifications". GURUJEE executes via Shizuku shell commands and replies with results.
+
+**Independent Test**: With Shizuku active, `POST /automate {"command": "open WhatsApp"}` →
+WhatsApp opens on device. Check `data/memory.db` `automation_log` has 1 row with `status: success`.
+Shizuku deactivated → friendly error in response, not a crash.
+
+### Implementation for User Story 4
+
+- [X] T043 [US4] Implement `gurujee/automation/executor.py` — `ShizukuExecutor` class: `_rish_path` from `config/automation.yaml`; `execute(cmd: str, timeout: int) → tuple[str, str, int]` runs `rish -c "<cmd>"` via `asyncio.create_subprocess_shell`, captures stdout/stderr, enforces timeout (raises `AutomationTimeoutError`); `is_available() → bool` checks rish binary exists and Shizuku running; on unavailable raises `ShizukuUnavailableError` with user-friendly message and re-activation steps
+- [X] T044 [P] [US4] Implement `gurujee/automation/actions/apps.py` — `open_app(executor, package_name: str)`: runs `am start -n <package>/.MainActivity` with fallback to `am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000 <package>`; `list_running_apps(executor)`: `dumpsys activity | grep mResumedActivity`; `resolve_package(app_name: str) → str`: maps common names to packages (`whatsapp`, `chrome`, `camera`, `settings`, `clock`, `messages`, `youtube`) extensible via config
+- [X] T045 [P] [US4] Implement `gurujee/automation/actions/device.py` — `set_volume(executor, level: int)`: `media volume --set <level> --stream 3`; `get_volume(executor)`: `media volume --get --stream 3`; `set_wifi(executor, enabled: bool)`: `svc wifi enable/disable`; `set_bluetooth(executor, enabled: bool)`: `svc bluetooth enable/disable`; `set_flashlight(executor, enabled: bool)`: camera flash toggle via `cmd`; `set_brightness(executor, level: int)`: `settings put system screen_brightness <level>`
+- [X] T046 [P] [US4] Implement `gurujee/automation/actions/input.py` — `tap(executor, x: int, y: int)`: `input tap <x> <y>`; `swipe(executor, x1, y1, x2, y2, duration_ms=300)`: `input swipe`; `type_text(executor, text: str)`: `input text "<text>"` (escape special chars); `key_event(executor, keycode: int)`: `input keyevent <keycode>`; `press_back(executor)`: shortcut for keyevent 4
+- [X] T047 [P] [US4] Implement `gurujee/automation/actions/notifications.py` — `list_notifications(executor)`: `termux-notification-list` via subprocess (Termux:API, not Shizuku), parse JSON; `dismiss_notification(executor, notif_id)`: `termux-notification-remove <id>`; cache results in `notification_cache` table via `LongTermMemory.cache_notifications()`
+- [X] T048 [P] [US4] Implement `gurujee/automation/actions/system.py` — `take_screenshot(executor)`: `screencap -p <path>` via Shizuku, returns path; `get_running_apps(executor)`: `dumpsys activity | grep mFocusedApp`
+- [X] T049 [US4] Implement `gurujee/automation/tool_router.py` — `ToolRouter` class: defines OpenAI tool schemas for 5 categories (open_app, device_setting, ui_input, set_reminder, read_notifications) as `tools` list for AI function-calling; `route(tool_call_json: dict) → Coroutine` maps `function.name` to correct action function + executor; raises `AutomationError` for unknown tool name
+- [X] T050 [US4] Implement `gurujee/agents/automation_agent.py` — `AutomationAgent(BaseAgent)`: initialises `ShizukuExecutor` and `ToolRouter`; handles `AUTOMATE_REQUEST`: calls `ToolRouter.route(tool_call)`, records to `automation_log` (success/failed/timeout), publishes `AUTOMATE_RESULT` with outcome and duration_ms; on `ShizukuUnavailableError` publishes friendly error with re-activation instructions; prunes `automation_log` to 500 entries on startup
+- [X] T051 [US4] Implement `gurujee/server/routers/automate.py` — `POST /automate`: accepts `{"command": str}`, publishes `AUTOMATE_REQUEST` to AutomationAgent via MessageBus, awaits `AUTOMATE_RESULT` reply (timeout 15s), returns `{"success": bool, "result": str, "command_type": str, "duration_ms": int}`
+- [X] T052 [US4] Implement `gurujee/server/routers/notifications.py` — `GET /notifications`: reads latest 20 rows from `notification_cache`; `POST /notifications/refresh`: triggers `AUTOMATE_REQUEST` for notification fetch, returns fresh list
+- [X] T053 [US4] Update `gurujee/ai/client.py` — integrate `ToolRouter.tools` list into every `chat.completions.create()` call as `tools=` parameter; when AI returns `tool_calls` in stream chunk, emit as `AUTOMATE_REQUEST` message instead of text; handle parallel tool calls (up to 4 per response per ADR-001)
+- [X] T054 [US4] Update `gurujee/server/static/app.js` — handle `automate_result` WebSocket event: render automation result as system bubble with distinct colour `#1e1e3a`; on `shizuku_unavailable` error show banner with re-activation steps link; update status bar with automation state indicator
+- [X] T055 [US4] Write `tests/test_automation_agent.py` — mock `ShizukuExecutor`; test: AUTOMATE_REQUEST dispatched to correct action, success logged to automation_log, timeout → status=timeout in log, Shizuku unavailable → friendly error published, automation_log pruned to 500 on startup
+- [X] T056 [P] [US4] Write `tests/test_automation_actions.py` — mock executor; test each action: open_app resolves package + builds correct `am start` command, set_volume calls correct `media volume` command, tap/swipe produce correct `input` commands, list_notifications parses Termux:API JSON output
+- [X] T057 [P] [US4] Write `tests/test_server_automate.py` — POST /automate with mock AutomationAgent; test: success response format, timeout response, Shizuku unavailable response, GET /notifications returns cached rows, POST /notifications/refresh triggers refresh
+
+**Checkpoint (US4)**: Shizuku active → `POST /automate {"command": "open WhatsApp"}` → WhatsApp opens. `GET /notifications` → notification list. `automation_log` table has entries. Shizuku deactivated → friendly error in PWA, daemon stays running.
+
+---
+
+## Phase 7: User Story 5 — Launcher APK (Priority: P1)
+
+**Goal**: Non-technical user taps GURUJEE.apk on a fresh Android device (no Termux pre-installed).
+Sees progress screen. Within 3 minutes, sees PWA chat UI in WebView. Sends a message.
+
+**Independent Test**: Install launcher APK on a fresh Android device. Tap GURUJEE icon. Within
+3 minutes, see the chat UI. Send a message. Receive a streaming response.
+
+### Implementation for User Story 5
+
+- [X] T058 [US5] Implement `launcher/bootstrap.py` — `check_termux_installed() → bool`: `pm list packages | grep com.termux`; `install_termux()`: `pm install -r /sdcard/DCIM/termux.apk` (APK bundled in launcher assets, copied to sdcard on first run); `check_termux_api_installed() → bool`; `install_termux_api()`; `inject_bootstrap(script_path: str)`: uses `am start -n com.termux/.app.TermuxActivity --es com.termux.app.RUN_COMMAND_PATH "<script>" --ez com.termux.app.RUN_COMMAND_SESSION_ACTION 0` to inject and run bootstrap; `poll_daemon_ready(timeout_seconds=180) → bool`: GET `http://localhost:7171/health` every 3s until `status=="ready"` or timeout
+- [X] T059 [US5] Implement `launcher/main.py` — Kivy `App` subclass `GurujeeApp`: `build()` returns `ScreenManager` with `ProgressScreen` and `WebViewScreen`; `ProgressScreen`: `ProgressBar` widget + `Label` for status messages ("Installing Termux…", "Starting GURUJEE…", "Connecting…"); `WebViewScreen`: uses `android.webview.WebView` via `jnius` (`autoclass("android.webkit.WebView")`) to load `http://localhost:7171` with `setJavaScriptEnabled(True)`, `setDomStorageEnabled(True)`; `GurujeeApp.on_start()` launches `bootstrap` in `threading.Thread`; on `poll_daemon_ready()` success calls `Clock.schedule_once(switch_to_webview, 0)`
+- [X] T060 [US5] Write `launcher/buildozer.spec` — `package.name = gurujee`, `package.domain = ai.gurujee`, `version = 1.0.0`, `requirements = python3,kivy,requests,jnius,android`, `android.permissions = INTERNET,REQUEST_INSTALL_PACKAGES,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE`, `android.api = 34`, `android.minapi = 29`, `source.include_exts = py,apk,sh`, `android.copy_libs = 1`
+
+**Checkpoint (US5)**: `buildozer android debug` completes without error. APK installs on Android 10+ device. Fresh device (no Termux) → tap APK → progress screen → chat UI loads → message works.
+
+---
+
+## Phase 8: Developer TUI (Dev Tool Only — `python -m gurujee --tui`)
+
+**Purpose**: Textual TUI for developers and admins. Runs in same process as daemon via
+`app.run_worker()`. Not part of non-technical user flow.
+
+- [X] T061 Implement `gurujee/tui/app.py` — `GurujeeApp(App)`: `--tui` mode only; runs `GatewayDaemon` as `app.run_worker()` coroutine; tab navigation: F1=Chat, F2=Agent Status, F3=Settings; handles CTRL+C graceful shutdown
+- [X] T062 [P] Implement `gurujee/tui/theme.py` — CSS constants: `BACKGROUND="#0a0a0a"`, `AMBER="#f0a500"`, `ORANGE="#ff6b00"`, `PANEL_BG="#1a1a1a"`, `USER_BUBBLE="#1a1a2e"`, `ASSISTANT_BUBBLE="#0d3b2e"`
+- [X] T063 [P] Implement `gurujee/tui/screens/chat_screen.py` — `ChatScreen(Screen)`: scrollable `RichLog` for history; `Input` widget; sends `CHAT_REQUEST` to bus on Enter; appends `CHAT_STREAM_CHUNK` tokens in-place with blinking cursor indicator; shows `[interrupted]` on stream error; commits full message to display on `CHAT_RESPONSE`
+- [X] T064 [P] Implement `gurujee/tui/screens/agent_status_screen.py` — `AgentStatusScreen(Screen)`: `DataTable` refreshed every 2s from `GatewayDaemon.agent_states`; columns: Name, Status (colour-coded: green=RUNNING, yellow=STARTING, red=ERROR), Restarts, Last Restart
+- [X] T065 [P] Implement `gurujee/tui/screens/settings_screen.py` — `SettingsScreen(Screen)`: AI model selector (`Select` widget reads `config/models.yaml`, writes `data/user_config.yaml`); soul identity editor (`TextArea` reads/writes `data/soul_identity.yaml` via ruamel.yaml); Phase 2 stubs: "Calls > Auto-Answer" and "SMS Auto-Reply" visible but disabled with "(Phase 2)" label
+
+**Checkpoint (TUI)**: `python -m gurujee --tui` opens Textual app. Chat works (tokens stream). Agent Status shows all 6 agents. Settings saves changes to YAML. TUI crash does not kill daemon (agents continue).
+
+---
+
+## Phase 9: Polish & Cross-Cutting Concerns
+
+**Purpose**: Security hardening, RAM profiling, logging, error handling, and final integration.
+
+- [X] T066 Add `RotatingFileHandler(maxBytes=5*1024*1024, backupCount=3)` to `data/heartbeat.log`, `data/memory.log`, `data/automation.log`, `data/server.log`, `data/boot.log` in each respective module; grep all Python files for `print(` and replace with logger calls
+- [X] T067 [P] Verify network allowlist enforcement in `gurujee/ai/client.py` — pre-flight check against `{"gen.pollinations.ai", "api.elevenlabs.io"}` before every outbound call; non-allowlisted host raises `NetworkPolicyError`; log blocked attempts to `data/memory.log`
+- [X] T068 [P] Add `GURUJEE_DATA_DIR` environment variable override to `gurujee/config/loader.py` — allows CI to point to a temp directory; all `pathlib.Path` data references route through `ConfigLoader.data_dir`
+- [X] T069 Profile daemon + uvicorn idle RAM: run `python -m memory_profiler gurujee/__main__.py --headless`; if RSS > 50 MB, apply lazy import to heaviest dependency; document measured value in `specs/001-gurujee-foundation/plan.md` NFR budget row (P1 constitutional requirement — MUST NOT be skipped)
+- [X] T070 [P] Verify Termux:Boot script created by `SetupWizard._step_daemons()` at `~/.termux/boot/start-gurujee.sh` has correct content: `#!/data/data/com.termux/files/usr/bin/bash`, `cd ~/gurujee`, `python -m gurujee --headless >> data/boot.log 2>&1 &`; add test to `test_setup_wizard.py`
+- [X] T071 [P] Add global exception handler in `gurujee/server/app.py` — `@app.exception_handler(Exception)`: catch unhandled exceptions in request handlers, return `{"error": str(e), "done": true}` as SSE or JSON; log to `data/server.log`; never crash daemon on bad API request
+- [X] T072 [P] Add Shizuku health flag to `GET /health` in `gurujee/server/routers/health.py` — if Shizuku unavailable, return `{"status": "ready", "warnings": ["shizuku_inactive"]}` (not an error — daemon usable without automation)
+- [X] T073 Run full test suite `pytest --cov=gurujee --cov-report=term-missing` — confirm ≥70% coverage on all agent and server files; fix any failing tests; document final coverage percentage in `specs/001-gurujee-foundation/quickstart.md`
+- [X] T074 Update `specs/001-gurujee-foundation/quickstart.md` — add split-layer developer setup: how to run `python -m gurujee --headless`, open PWA at `localhost:7171`, use `--tui`, run tests with coverage, build launcher APK with `buildozer android debug`
+
+**Final Checkpoint**: `pytest` ≥70% passes. Idle daemon RSS ≤50 MB confirmed. `GET /health` → ready. `http://localhost:7171` shows PWA chat UI. "Open WhatsApp" automation works. `install.sh` completes on clean Termux. All logs rotating. Launcher APK installs and reaches chat screen.
 
 ---
 
@@ -158,100 +220,132 @@ All US1 + US2 implementation MUST be complete before this phase.
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: No dependencies — all T002–T009 parallelizable after T001
-- **Foundational (Phase 2)**: Depends on Setup completion — BLOCKS both US1 and US2
-- **US1 (Phase 3)**: Depends on Foundational; T017–T018 (tests) first
-- **US2 (Phase 4)**: Depends on Foundational; T026–T029 (tests) first; can run IN PARALLEL with US1
-- **Polish (Phase 5)**: Depends on both US1 AND US2 complete
+```
+Phase 1 (Setup — T001–T010)
+  └─→ Phase 2 (Foundational — T011–T018) ← CRITICAL GATE
+        └─→ Phase 3 (US1: Setup Wizard) — entry gate for daemon
+              └─→ Phase 4 (US2: Agents + Memory) — core intelligence
+                    └─→ Phase 5 (US3: FastAPI + PWA) — user interface
+                          ├─→ Phase 6 (US4: Automation) — device control
+                          ├─→ Phase 7 (US5: Launcher APK) — zero-touch
+                          └─→ Phase 8 (TUI) — dev tool (parallel with US4/US5)
+  All complete → Phase 9 (Polish)
+```
 
-### User Story Dependencies
+### Within Phase 2
 
-- **US1**: No dependency on US2 — `SetupWizard` does not require any agent to be running
-- **US2**: No dependency on US1 — agents start independently; `data/soul_identity.yaml` is
-  initialized by wizard (US1) but US2 tests use `fake_soul_yaml` fixture from conftest.py
-- **US1 and US2 can be implemented in parallel** by separate developers once Phase 2 completes
+- T011 (config loader) first — agents need it
+- T012, T013, T015 parallel (independent files)
+- T014 after T015 conceptually, but files are independent — can parallel
+- T016 (AI client) after T011 (needs config loader)
+- T017, T018 (tests) after T013, T016 respectively
 
-### Within Each User Story
+### Within Phase 5 (US3)
 
-- Tests (T017–T018, T026–T029) MUST be written and FAIL before implementation starts
-- `memory/short_term.py` (T030) before `memory_agent.py` (T033)
-- `memory/long_term.py` (T031) before `memory_agent.py` (T033)
-- `soul_agent.py` (T032) after `ai/client.py` (T014) — already in Foundational
-- All TUI screens (T037–T040) are independent of each other
-- `app.py` (T041) after all three screens (T038–T040)
-- wizard steps (T020–T025) run sequentially within `wizard.py` after base class (T019)
+- T032 (server/app.py) first
+- T033–T036 (routers + WS) parallel after T032
+- T037–T041 (static files) parallel — fully independent
+- T042 (tests) after all routes implemented
 
-### Parallel Opportunities
+### Within Phase 6 (US4)
+
+- T043 (executor) first — all actions need it
+- T044–T048 (actions) parallel after T043
+- T049 (tool_router) after T044–T048 (needs action signatures)
+- T050 (automation_agent) after T049
+- T051, T052 (server routes) after T050
+- T053 (ai/client update) after T049
+- T054 (app.js update) after T051
+- T055–T057 (tests) parallel after implementation
+
+### Parallel Opportunities Summary
 
 ```bash
-# Phase 1 — after T001:
-T002 & T003 & T004 & T005 & T006 & T007 & T008 & T009
+# Phase 1 — all parallel:
+T003 T004 T005 T006 T007 T008 T009 (all independent config/setup files)
 
-# Phase 2 — after Phase 1:
-T011 & T012 & T014 & T016   (independent files)
-T010 first (loader.py needed by T013, T015)
-T013 after T012 (gateway needs base_agent)
-T015 after T010, T011 (main needs loader + keystore)
+# Phase 2 — Group A parallel:
+T012  # base_agent.py
+T013  # keystore.py
+T015  # short_term.py
 
-# Phase 3 US1 — tests parallel:
-T017 & T018
+# Phase 5 — static files parallel:
+T037 T038 T039 T040 T041
 
-# Phase 3 US1 — wizard impl:
-T019 → T020 → T021 → T022 → T023 → T024 → T025  (sequential, same file)
+# Phase 5 — routers parallel:
+T033 T034 T035 T036
 
-# Phase 4 US2 — tests parallel:
-T026 & T027 & T028 & T029
+# Phase 6 — actions parallel:
+T044 T045 T046 T047 T048
 
-# Phase 4 US2 — impl parallel:
-T030 & T031 & T035 & T036 & T037   (independent files)
-T032 after T030 (soul agent uses short_term for context hints)
-T033 after T030 & T031 (memory agent needs both)
-T034 after T012 (heartbeat uses base_agent — already done)
-T038 & T039 & T040   (independent TUI screens)
-T041 after T038, T039, T040 (app.py assembles screens)
-
-# Phase 5 — parallel:
-T042 & T043 & T045 & T046 & T047 & T048
-T044 after T042 (coverage after logging complete)
-T049 after T044 (quickstart after coverage confirms paths)
+# Phase 6 — tests parallel:
+T055 T056 T057
 ```
 
 ---
 
 ## Implementation Strategy
 
-### MVP First (US1 Setup Wizard — 18 tasks)
+### MVP — Core chat via PWA (US1 + US2 + US3 only)
 
-1. Complete Phase 1: Setup (T001–T009)
-2. Complete Phase 2: Foundational (T010–T016) — CRITICAL GATE
-3. Write US1 tests (T017–T018) — verify they FAIL
-4. Complete Phase 3: US1 (T019–T025)
-5. **STOP and VALIDATE**: all 8 wizard steps pass, boot script created, keystore created
-6. **MVP shipped**: New user can configure GURUJEE in under 10 minutes ✓
+1. Phase 1: Setup (T001–T010)
+2. Phase 2: Foundational (T011–T018) — **CRITICAL GATE**
+3. Phase 3: US1 — Setup Wizard (T019–T022)
+4. Phase 4: US2 — Agents + Memory (T023–T031)
+5. Phase 5: US3 — FastAPI + PWA (T032–T042)
+6. **STOP AND VALIDATE**: Open `localhost:7171`, send message, streaming works, stop/start daemon, memory recall works
+7. Non-technical users can now use GURUJEE via PWA
 
-### Incremental Delivery
+### Incremental Addition
 
-1. **MVP** (US1 complete) → guided setup ships; users can install GURUJEE and set their PIN
-2. **Phase 4** (US2 complete) → AI chat + memory ships; GURUJEE holds conversations with streaming
-3. **Polish** → 70% coverage, P10 compliance, data model updated; ready for Phase 2 feature branch
+8. Phase 6: US4 — Automation (T043–T057) → "open WhatsApp" works
+9. Phase 7: US5 — Launcher APK (T058–T060) → truly zero-touch
+10. Phase 8: TUI (T061–T065) → developer tooling
+11. Phase 9: Polish (T066–T074) → production-ready
 
-### Parallel Team Strategy
+### Parallel Team Strategy (3 developers after Phase 2)
 
-With two developers after Foundational (Phase 2) completes:
-- Developer A: Phase 3 (US1 — wizard, keystore PIN flow, wizard steps)
-- Developer B: Phase 4 (US2 — agents, memory, streaming TUI)
-- Both merge → Phase 5 (polish, coverage, docs, data model update)
+| Developer | Tasks |
+|-----------|-------|
+| A | US1 (T019–T022) then US2 (T023–T031) |
+| B | US3 server (T032–T036, T042) — routes + tests |
+| C | US3 static (T037–T041) — PWA HTML/CSS/JS |
+
+After US3 complete:
+| Developer | Tasks |
+|-----------|-------|
+| A | US4 executor + actions (T043–T048) |
+| B | US4 router + agent + routes (T049–T054) |
+| C | US5 Launcher APK (T058–T060) |
+
+---
+
+## Task Count Summary
+
+| Phase | Tasks | Notes |
+|-------|-------|-------|
+| Phase 1: Setup | T001–T010 (10) | All parallelizable |
+| Phase 2: Foundational | T011–T018 (8) | Blocking gate |
+| Phase 3: US1 Setup | T019–T022 (4) | Entry gate |
+| Phase 4: US2 Memory/AI | T023–T031 (9) | Core value |
+| Phase 5: US3 PWA/Server | T032–T042 (11) | User interface |
+| Phase 6: US4 Automation | T043–T057 (15) | Device control |
+| Phase 7: US5 Launcher | T058–T060 (3) | Zero-touch |
+| Phase 8: TUI | T061–T065 (5) | Dev tool |
+| Phase 9: Polish | T066–T074 (9) | Hardening |
+| **Total** | **74 tasks** | |
+
+**Parallelizable tasks**: 34 marked `[P]`
+**MVP scope** (US1+US2+US3): T001–T042 (42 tasks)
 
 ---
 
 ## Notes
 
-- `[P]` tasks = parallelizable (different files, no incomplete dependencies at that point)
-- `[US1]` / `[US2]` maps each task to its user story for delivery traceability
-- Tests MUST fail before implementation — do not skip the red phase
-- Commit after each checkpoint or logical group
-- For Termux testing: use `tmux` to keep GURUJEE running while verifying memory
-- `data/` is gitignored; the wizard creates it on first run
-- `agents/soul_identity.yaml` is the shipped template only; `data/soul_identity.yaml` is the runtime copy
-- All `pathlib.Path` — no `os.path.join` anywhere (P10)
-- PIN is NEVER logged, stored, or passed as a CLI argument
+- `[P]` = task touches a different file than concurrent tasks — safe to run in parallel
+- `[USn]` = maps to user story n for traceability and independent delivery
+- All tasks are specific enough to implement without additional design context
+- Constitution P1 RAM constraint: T069 (profiling) is mandatory — do NOT skip
+- Security: FastAPI MUST bind `127.0.0.1` (never `0.0.0.0`) — enforced in T032 and verified in T069
+- Commit after each task or logical group (P10 code quality)
+- Stop at each phase checkpoint to validate independently before continuing

@@ -19,3 +19,6 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
+launcher/bin/
+launcher/.buildozer/
+launcher/__pycache__/
