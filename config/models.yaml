@@ -1,11 +1,486 @@
-default: nova-fast
-available:
-  - nova-fast
-  - gemini-fast
-  - gemini-search
-  - openai-fast
-  - grok
-  - mistral
-endpoint:
-  base_url: "https://gen.pollinations.ai/v1"
-  api_key: ""
+# =================================================================
+# GURUJEE Provider Catalogue — mirrors OpenClaw docs.openclaw.ai/providers
+# Format: provider/model-id
+# Keys go in data/gurujee.keystore — NEVER in this file
+# See ADR-005 for architecture decisions.
+# =================================================================
+
+mode: merge
+
+# Default — zero-key free provider
+default:
+  primary: "pollinations/nova-fast"
+  fallbacks:
+    - "pollinations/gemini-fast"
+    - "pollinations/mistral"
+
+# =================================================================
+# TIER 1 — BUILT-IN PROVIDERS (pi-ai catalog, no models.providers needed)
+# =================================================================
+
+builtin_providers:
+
+  # --- Zero-key default ---
+  pollinations:
+    label: "Pollinations AI (Free, No Key)"
+    base_url: "https://gen.pollinations.ai/v1"
+    api_key_required: false
+    api_compat: "openai"
+    models:
+      - {id: nova-fast,      label: "Nova Fast",         ctx: 32000,  caps: [chat, tools]}
+      - {id: gemini-fast,    label: "Gemini Fast",        ctx: 128000, caps: [chat, tools, vision]}
+      - {id: gemini-search,  label: "Gemini Search",      ctx: 128000, caps: [chat, tools, vision, search, image_gen]}
+      - {id: openai-fast,    label: "OpenAI Fast",        ctx: 16000,  caps: [chat, tools]}
+      - {id: grok,           label: "Grok",               ctx: 131072, caps: [chat, tools]}
+      - {id: mistral,        label: "Mistral",            ctx: 32000,  caps: [chat, tools]}
+
+  # --- OpenAI ---
+  openai:
+    label: "OpenAI"
+    auth_env: "OPENAI_API_KEY"
+    auth_rotation_envs: ["OPENAI_API_KEYS", "OPENAI_API_KEY_1", "OPENAI_API_KEY_2"]
+    auth_live_override: "GURUJEE_LIVE_OPENAI_KEY"
+    api_compat: "openai"
+    transport: "auto"
+    onboard_cmd: "models auth login --provider openai"
+    models:
+      - {id: gpt-5.4,        label: "GPT-5.4",            ctx: 200000, caps: [chat, tools, vision, reasoning]}
+      - {id: gpt-5.4-pro,    label: "GPT-5.4 Pro",        ctx: 200000, caps: [chat, tools, vision, reasoning]}
+      - {id: gpt-4o,         label: "GPT-4o",             ctx: 128000, caps: [chat, tools, vision]}
+      - {id: gpt-4o-mini,    label: "GPT-4o Mini",        ctx: 128000, caps: [chat, tools]}
+      - {id: o3,             label: "o3",                 ctx: 200000, caps: [chat, tools, reasoning]}
+      - {id: o4-mini,        label: "o4-mini",            ctx: 200000, caps: [chat, tools, reasoning]}
+
+  # --- OpenAI Codex (OAuth via ChatGPT) ---
+  openai-codex:
+    label: "OpenAI Codex (ChatGPT OAuth)"
+    auth_type: "oauth"
+    api_compat: "openai"
+    transport: "auto"
+    onboard_cmd: "models auth login --provider openai-codex"
+    models:
+      - {id: gpt-5.4, label: "GPT-5.4 (Codex)", ctx: 200000, caps: [chat, tools, reasoning]}
+
+  # --- Anthropic ---
+  anthropic:
+    label: "Anthropic (Claude)"
+    auth_env: "ANTHROPIC_API_KEY"
+    auth_rotation_envs: ["ANTHROPIC_API_KEYS", "ANTHROPIC_API_KEY_1", "ANTHROPIC_API_KEY_2"]
+    auth_live_override: "GURUJEE_LIVE_ANTHROPIC_KEY"
+    auth_alt: "claude setup-token"
+    api_compat: "anthropic"
+    onboard_cmd: "models auth paste-token --provider anthropic"
+    models:
+      - {id: claude-opus-4-6,           label: "Claude Opus 4.6",   ctx: 200000, caps: [chat, tools, vision, reasoning]}
+      - {id: claude-sonnet-4-6,         label: "Claude Sonnet 4.6", ctx: 200000, caps: [chat, tools, vision]}
+      - {id: claude-haiku-4-5-20251001, label: "Claude Haiku 4.5",  ctx: 200000, caps: [chat, tools]}
+
+  # --- OpenCode (Zen runtime) ---
+  opencode:
+    label: "OpenCode Zen"
+    auth_env: "OPENCODE_API_KEY"
+    api_compat: "openai"
+    onboard_cmd: "models auth login --provider opencode-zen"
+    models:
+      - {id: claude-opus-4-6, label: "Claude Opus 4.6 (OC)", ctx: 200000, caps: [chat, tools, vision]}
+      - {id: kimi-k2.5,       label: "Kimi K2.5 (OC)",       ctx: 131072, caps: [chat, tools]}
+
+  # --- OpenCode Go runtime ---
+  opencode-go:
+    label: "OpenCode Go"
+    auth_env: "OPENCODE_API_KEY"
+    api_compat: "openai"
+    onboard_cmd: "models auth login --provider opencode-go"
+    models:
+      - {id: kimi-k2.5, label: "Kimi K2.5 (OC Go)", ctx: 131072, caps: [chat, tools]}
+
+  # --- Google Gemini (API key) ---
+  google:
+    label: "Google Gemini"
+    auth_env: "GEMINI_API_KEY"
+    auth_fallback_env: "GOOGLE_API_KEY"
+    auth_rotation_envs: ["GEMINI_API_KEYS", "GEMINI_API_KEY_1", "GEMINI_API_KEY_2"]
+    auth_live_override: "GURUJEE_LIVE_GEMINI_KEY"
+    api_compat: "openai"
+    onboard_cmd: "models auth login --provider google"
+    models:
+      - {id: gemini-3.1-pro-preview,  label: "Gemini 3.1 Pro",   ctx: 1048576, caps: [chat, tools, vision, reasoning]}
+      - {id: gemini-3-flash-preview,  label: "Gemini 3 Flash",   ctx: 1048576, caps: [chat, tools, vision]}
+      - {id: gemini-2.5-pro,          label: "Gemini 2.5 Pro",   ctx: 1048576, caps: [chat, tools, vision, reasoning]}
+      - {id: gemini-2.5-flash,        label: "Gemini 2.5 Flash", ctx: 1048576, caps: [chat, tools, vision]}
+
+  # --- Google Vertex AI ---
+  google-vertex:
+    label: "Google Vertex AI"
+    auth_type: "gcloud-adc"
+    api_compat: "openai"
+    models: []
+
+  # --- Z.AI (GLM models) ---
+  zai:
+    label: "Z.AI (GLM)"
+    auth_env: "ZAI_API_KEY"
+    api_compat: "openai"
+    onboard_cmd: "models auth login --provider zai"
+    model_aliases: ["z.ai/*", "z-ai/*"]
+    models:
+      - {id: glm-5,   label: "GLM-5",   ctx: 128000, caps: [chat, tools, vision]}
+      - {id: glm-4.7, label: "GLM-4.7", ctx: 128000, caps: [chat, tools]}
+
+  # --- Vercel AI Gateway ---
+  vercel-ai-gateway:
+    label: "Vercel AI Gateway"
+    auth_env: "AI_GATEWAY_API_KEY"
+    api_compat: "openai"
+    base_url: "https://ai-gateway.vercel.sh/v1"
+    onboard_cmd: "models auth login --provider vercel-ai-gateway"
+    model_format: "vercel-ai-gateway/{provider}/{model}"
+    models:
+      - {id: "anthropic/claude-opus-4.6", label: "Claude via Vercel", ctx: 200000, caps: [chat, tools]}
+
+  # --- Kilo Gateway ---
+  kilocode:
+    label: "Kilo Gateway (kilocode)"
+    auth_env: "KILOCODE_API_KEY"
+    api_compat: "openai"
+    base_url: "https://api.kilo.ai/api/gateway/"
+    onboard_cmd: "models auth login --provider kilocode"
+    model_format: "kilocode/{provider}/{model}"
+    models:
+      - {id: "anthropic/claude-opus-4.6", label: "Claude via Kilo", ctx: 200000, caps: [chat, tools]}
+
+# =================================================================
+# TIER 2 — CUSTOM PROVIDERS (OpenAI-compatible base URLs)
+# =================================================================
+
+custom_providers:
+
+  # --- OpenRouter (multi-model gateway) ---
+  openrouter:
+    label: "OpenRouter"
+    base_url: "https://openrouter.ai/api/v1"
+    auth_env: "OPENROUTER_API_KEY"
+    api_compat: "openai"
+    model_format: "openrouter/{author}/{slug}"
+    builtin_support: true
+    models:
+      - {id: "openrouter/auto",                        label: "Auto (cheapest fit)",  ctx: 200000}
+      - {id: "openrouter/deepseek/deepseek-r1",        label: "DeepSeek R1",          ctx: 64000,  caps: [reasoning]}
+      - {id: "openrouter/meta-llama/llama-4-maverick", label: "Llama 4 Maverick",     ctx: 128000}
+      - {id: "openrouter/qwen/qwen3-235b-a22b",        label: "Qwen3 235B",           ctx: 32000,  caps: [reasoning]}
+      - {id: "openrouter/google/gemini-3.1-pro",       label: "Gemini 3.1 Pro (OR)",  ctx: 1048576}
+      - {id: "openrouter/anthropic/claude-opus-4-6",   label: "Claude Opus (OR)",     ctx: 200000}
+
+  # --- Ollama (local models) ---
+  ollama:
+    label: "Ollama (Local)"
+    base_url: "http://127.0.0.1:11434/v1"
+    auth_env: "OLLAMA_API_KEY"
+    api_compat: "openai-responses"
+    ctx_recommended: 64000
+    dynamic_catalog: true
+    models: []
+
+  # --- DeepSeek (direct) ---
+  deepseek:
+    label: "DeepSeek"
+    base_url: "https://api.deepseek.com/v1"
+    auth_env: "DEEPSEEK_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: deepseek-r1, label: "DeepSeek R1", ctx: 64000, caps: [chat, tools, reasoning]}
+      - {id: deepseek-v3, label: "DeepSeek V3", ctx: 64000, caps: [chat, tools]}
+
+  # --- Groq (LPU fast inference) ---
+  groq:
+    label: "Groq"
+    base_url: "https://api.groq.com/openai/v1"
+    auth_env: "GROQ_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: llama-3.3-70b-versatile,      label: "Llama 3.3 70B",  ctx: 128000, caps: [chat, tools]}
+      - {id: moonshotai/kimi-k2-instruct,  label: "Kimi K2",        ctx: 131072, caps: [chat, tools]}
+      - {id: qwen-qwq-32b,                 label: "QwQ 32B",        ctx: 32000,  caps: [chat, reasoning]}
+
+  # --- Mistral ---
+  mistral:
+    label: "Mistral AI"
+    base_url: "https://api.mistral.ai/v1"
+    auth_env: "MISTRAL_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: mistral-large-latest, label: "Mistral Large", ctx: 131072, caps: [chat, tools]}
+      - {id: mistral-small-latest, label: "Mistral Small", ctx: 131072, caps: [chat, tools]}
+      - {id: codestral-latest,     label: "Codestral",     ctx: 256000, caps: [chat, tools, code]}
+
+  # --- xAI (Grok direct) ---
+  xai:
+    label: "xAI (Grok)"
+    base_url: "https://api.x.ai/v1"
+    auth_env: "XAI_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: grok-3,      label: "Grok 3",      ctx: 131072, caps: [chat, tools, reasoning]}
+      - {id: grok-3-mini, label: "Grok 3 Mini", ctx: 131072, caps: [chat, tools]}
+
+  # --- Moonshot AI (Kimi) ---
+  moonshot:
+    label: "Moonshot AI (Kimi)"
+    base_url: "https://api.moonshot.ai/v1"
+    auth_env: "MOONSHOT_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: kimi-k2.5,        label: "Kimi K2.5",     ctx: 131072, caps: [chat, tools, reasoning]}
+      - {id: moonshot-v1-128k, label: "Moonshot 128K", ctx: 128000, caps: [chat, tools]}
+
+  # --- Together AI ---
+  together:
+    label: "Together AI"
+    base_url: "https://api.together.xyz/v1"
+    auth_env: "TOGETHER_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: meta-llama/Llama-3.3-70B-Instruct-Turbo, label: "Llama 3.3 70B Turbo",    ctx: 131072}
+      - {id: deepseek-ai/DeepSeek-R1,                  label: "DeepSeek R1 (Together)", ctx: 64000, caps: [reasoning]}
+
+  # --- Perplexity (web search LLM) ---
+  perplexity:
+    label: "Perplexity (Web Search)"
+    base_url: "https://api.perplexity.ai"
+    auth_env: "PERPLEXITY_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: sonar-pro,       label: "Sonar Pro",       ctx: 200000, caps: [chat, search]}
+      - {id: sonar-reasoning, label: "Sonar Reasoning", ctx: 128000, caps: [chat, search, reasoning]}
+
+  # --- Hugging Face Inference ---
+  huggingface:
+    label: "Hugging Face"
+    base_url: "https://api-inference.huggingface.co/v1"
+    auth_env: "HUGGINGFACE_HUB_TOKEN"
+    auth_env_alt: "HF_TOKEN"
+    api_compat: "openai"
+    model_format: "huggingface/{author}/{slug}"
+    models:
+      - {id: "huggingface/deepseek-ai/DeepSeek-R1", label: "DeepSeek R1 (HF)", ctx: 64000}
+
+  # --- NVIDIA NIM ---
+  nvidia:
+    label: "NVIDIA NIM"
+    base_url: "https://integrate.api.nvidia.com/v1"
+    auth_env: "NVIDIA_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: meta/llama-3.3-70b-instruct, label: "Llama 3.3 70B NIM", ctx: 128000}
+      - {id: deepseek-ai/deepseek-r1,     label: "DeepSeek R1 NIM",   ctx: 64000, caps: [reasoning]}
+
+  # --- Venice AI (privacy-focused) ---
+  venice:
+    label: "Venice AI"
+    base_url: "https://api.venice.ai/api/v1"
+    auth_env: "VENICE_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: venice-uncensored, label: "Venice Uncensored", ctx: 32000}
+
+  # --- MiniMax ---
+  minimax:
+    label: "MiniMax"
+    base_url: "https://api.minimax.chat/v1"
+    auth_env: "MINIMAX_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: MiniMax-Text-01, label: "MiniMax Text-01", ctx: 1000000, caps: [chat, tools]}
+
+  # --- StepFun ---
+  stepfun:
+    label: "StepFun"
+    base_url: "https://api.stepfun.com/v1"
+    auth_env: "STEPFUN_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: step-3-mini, label: "Step 3 Mini", ctx: 32000, caps: [chat, tools]}
+
+  # --- Alibaba Model Studio (Qwen cloud) ---
+  alibaba:
+    label: "Alibaba Model Studio"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    auth_env: "DASHSCOPE_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: qwen3-235b-a22b, label: "Qwen3 235B", ctx: 32000, caps: [chat, tools, reasoning]}
+      - {id: qwen3-30b-a3b,   label: "Qwen3 30B",  ctx: 32000, caps: [chat, tools]}
+      - {id: qwen-max,        label: "Qwen Max",   ctx: 32000, caps: [chat, tools]}
+
+  # --- Volcengine (Doubao) ---
+  volcengine:
+    label: "Volcengine (Doubao)"
+    base_url: "https://ark.cn-beijing.volces.com/api/v3"
+    auth_env: "ARK_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: doubao-pro-32k, label: "Doubao Pro 32K", ctx: 32000, caps: [chat, tools]}
+
+  # --- Chutes (open model hosting) ---
+  chutes:
+    label: "Chutes"
+    base_url: "https://llm.chutes.ai/v1"
+    auth_env: "CHUTES_API_TOKEN"
+    api_compat: "openai"
+    models:
+      - {id: deepseek-ai/DeepSeek-R1, label: "DeepSeek R1 (Chutes)", ctx: 64000, caps: [reasoning]}
+
+  # --- LiteLLM proxy (self-hosted) ---
+  litellm:
+    label: "LiteLLM Proxy"
+    base_url: "http://localhost:4000/v1"
+    auth_env: "LITELLM_API_KEY"
+    api_compat: "openai"
+    dynamic_catalog: true
+    models: []
+
+  # --- vLLM (local) ---
+  vllm:
+    label: "vLLM (Local)"
+    base_url: "http://localhost:8000/v1"
+    auth_env: "VLLM_API_KEY"
+    api_compat: "openai"
+    dynamic_catalog: true
+    models: []
+
+  # --- SGLang (local) ---
+  sglang:
+    label: "SGLang (Local)"
+    base_url: "http://localhost:30000/v1"
+    auth_env: "SGLANG_API_KEY"
+    api_compat: "openai"
+    dynamic_catalog: true
+    models: []
+
+  # --- Vydra ---
+  vydra:
+    label: "Vydra"
+    base_url: "https://api.vydra.io/v1"
+    auth_env: "VYDRA_API_KEY"
+    api_compat: "openai"
+    models: []
+
+  # --- Xiaomi MiMo ---
+  xiaomi:
+    label: "Xiaomi MiMo"
+    base_url: "https://api.mimo.ai/v1"
+    auth_env: "XIAOMI_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: mimo-7b, label: "MiMo 7B", ctx: 32000, caps: [chat, reasoning]}
+
+  # --- Amazon Bedrock ---
+  bedrock:
+    label: "Amazon Bedrock"
+    auth_type: "aws-iam"
+    api_compat: "bedrock"
+    models:
+      - {id: "anthropic.claude-opus-4-6-v1", label: "Claude Opus (Bedrock)", ctx: 200000}
+      - {id: "amazon.nova-pro-v1:0",          label: "Nova Pro (Bedrock)",    ctx: 300000}
+
+  # --- Cloudflare AI Gateway (proxy) ---
+  cloudflare-ai-gateway:
+    label: "Cloudflare AI Gateway"
+    base_url: "https://gateway.ai.cloudflare.com/v1/ACCOUNT_ID/GATEWAY_ID"
+    auth_env: "CLOUDFLARE_AI_GATEWAY_TOKEN"
+    api_compat: "openai"
+    models: []
+
+  # --- Qianfan (Baidu) ---
+  qianfan:
+    label: "Qianfan (Baidu)"
+    base_url: "https://qianfan.baidubce.com/v2"
+    auth_env: "QIANFAN_API_KEY"
+    api_compat: "openai"
+    models:
+      - {id: ernie-4.5-turbo-128k, label: "ERNIE 4.5 Turbo", ctx: 128000}
+
+  # --- GitHub Copilot ---
+  github-copilot:
+    label: "GitHub Copilot"
+    auth_type: "oauth-device"
+    api_compat: "openai"
+    onboard_cmd: "models auth login --provider github-copilot"
+    models:
+      - {id: claude-opus-4-6, label: "Claude Opus (Copilot)", ctx: 200000}
+      - {id: gpt-5.4,         label: "GPT-5.4 (Copilot)",    ctx: 200000}
+
+# =================================================================
+# TRANSCRIPTION PROVIDERS (STT — separate from LLM providers)
+# =================================================================
+
+transcription_providers:
+  whisper_local:
+    label: "Whisper (local, default)"
+    type: "local"
+    model: "tiny.en"
+    default: true
+
+  deepgram:
+    label: "Deepgram (cloud STT)"
+    base_url: "https://api.deepgram.com"
+    auth_env: "DEEPGRAM_API_KEY"
+    type: "cloud"
+    default: false
+
+# =================================================================
+# IMAGE / VIDEO GENERATION PROVIDERS
+# =================================================================
+
+image_providers:
+  pollinations_image:
+    label: "Pollinations (default, free)"
+    model: "pollinations/gemini-search"
+    default: true
+  fal:
+    label: "fal.ai"
+    base_url: "https://fal.run"
+    auth_env: "FAL_KEY"
+    api_compat: "fal"
+  runway:
+    label: "Runway (video)"
+    base_url: "https://api.runwayml.com/v1"
+    auth_env: "RUNWAY_API_KEY"
+    api_compat: "openai"
+  comfyui:
+    label: "ComfyUI (local image gen)"
+    base_url: "http://localhost:8188"
+    auth_env: ""
+    api_compat: "comfy"
+
+# =================================================================
+# FAILOVER CONFIG (mirrors OpenClaw failover system)
+# =================================================================
+
+failover:
+  rotate_on: [429, "rate_limit", "quota", "resource_exhausted", "timeout"]
+  fail_immediately_on: ["invalid_request", "format_error", "content_policy"]
+  cooldown_steps_minutes: [1, 5, 25, 60]
+  billing_disable_steps_hours: [5, 10, 20, 24]
+  billing_disable_max_hours: 24
+  billing_failure_window_hours: 24
+  fallback_on: ["auth_exhausted", "rate_limit_exhausted", "timeout_exhausted"]
+
+# =================================================================
+# PER-AGENT MODEL ROUTING
+# =================================================================
+
+agent_model_routing:
+  soul:         "pollinations/nova-fast"
+  memory:       "pollinations/nova-fast"
+  heartbeat:    "pollinations/nova-fast"
+  cron:         "pollinations/nova-fast"
+  user_agent:   "pollinations/nova-fast"
+  orchestrator: "pollinations/gemini-fast"
+  automation:   "pollinations/nova-fast"
+
+# =================================================================
+# USER-ADDED PROVIDERS (populated at runtime by guided setup / settings UI)
+# =================================================================
+
+user_providers: []

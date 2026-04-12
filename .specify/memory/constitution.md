@@ -1,17 +1,20 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change  : 1.1.0 → 1.1.1
-Bump rationale  : PATCH — P7 clarified: AutomationAgent reclassified from on-demand
-                  to always-on. No principle added or removed; agent table updated.
+Version change  : 1.1.1 → 1.2.0
+Bump rationale  : MINOR — P2 materially amended: single-endpoint restriction replaced
+                  by multi-provider catalogue system (ADR-005). New providers, auth
+                  rotation, and two-stage failover constitute a scope expansion.
 Added sections  : none
 Removed sections: none
 Modified        :
-  P7 — AutomationAgent moved from "On-demand agents" to "Always-on agents" table.
-       Rationale: PWA-primary architecture (ADR-003) requires instant response to
-       automation commands. Cold-start delay (~2-3s) is unacceptable in chat UI.
-       RAM overhead (~3-5MB) verified within P1 50MB idle ceiling.
-       See ADR-004 for full decision record and alternatives considered.
+  P2 — "Single Endpoint AI" renamed to "Provider Catalogue AI".
+       Pollinations retained as zero-key default. Multi-provider format
+       "provider/model-id" added. Auth from keystore only. Dynamic allowlist
+       from provider base_url fields. Two-stage failover documented.
+       See ADR-005 for full decision record.
+  P4 — Allowlist note updated: dynamic (from provider catalogue) instead of
+       hardcoded 4-host list.
 Templates       :
   .specify/templates/plan-template.md   ✅ no changes required
   .specify/templates/spec-template.md   ✅ no changes required
@@ -61,22 +64,37 @@ Rules:
 - STT MUST use `whisper tiny.en`; larger Whisper variants are prohibited.
 - Any component that exceeds its ceiling MUST be profiled and optimised before merge.
 
-### P2 — Single Endpoint AI (NO EXCEPTIONS)
+### P2 — Provider Catalogue AI (AMENDED v1.2.0)
 
-All AI inference — chat, vision, search, image generation — MUST route through one endpoint:
+All AI inference MUST use the provider catalogue defined in `config/models.yaml`.
+Pollinations is the zero-key default — GURUJEE MUST work out of the box with no configuration.
 
+**Model format**: `provider/model-id` (e.g. `"anthropic/claude-opus-4-6"`, `"ollama/llama3.3"`).
+
+**Provider tiers** (see `config/models.yaml` for full catalogue):
+- **Tier 1 — Built-in**: pollinations, openai, anthropic, google, opencode, zai,
+  vercel-ai-gateway, kilocode. No `models.providers` config needed — set key in keystore.
+- **Tier 2 — Custom**: ollama, openrouter, deepseek, groq, mistral, and 20+ more.
+  Defined by `base_url` + `api_compat` in `models.yaml`.
+
+**Default** (zero-key, works immediately):
 ```
-Base URL : https://gen.pollinations.ai/v1   (OpenAI-compatible)
-Auth     : none required (omit Authorization header or send empty string)
+pollinations/nova-fast  →  https://gen.pollinations.ai/v1  (OpenAI-compatible, no auth)
 ```
 
-Permitted model IDs (addable by user in config):
-`nova-fast`, `gemini-fast`, `gemini-search`, `openai-fast`, `grok`, `mistral`
-
-Rules:
-- Model IDs MUST NOT be hardcoded in logic; they MUST come from user config.
-- No secondary AI endpoint may be introduced without explicit governance approval.
-- Image generation uses `gemini-search` through the same base URL.
+**Rules:**
+- Model IDs MUST NOT be hardcoded in logic; they MUST come from user config or `agent_model_routing`.
+- All API keys MUST be stored in `data/gurujee.keystore` (AES-256-GCM). NEVER in config files or env vars.
+- Key resolution priority (highest first): `GURUJEE_LIVE_{PROVIDER}_KEY` → `{PROVIDER}_API_KEYS`
+  (comma list) → `{PROVIDER}_API_KEY_1/_2` → `{PROVIDER}_API_KEY`. All read from keystore.
+- Outbound hosts are dynamically allowlisted from all `base_url` fields in `config/models.yaml`
+  plus the security anchors in `config/security.yaml`.
+- Two-stage failover: Stage 1 = auth profile rotation within provider (exponential cooldown);
+  Stage 2 = advance to next model in `model_fallbacks` list (only when all Stage 1 profiles
+  are exhausted).
+- New providers may be added to `models.yaml` without governance approval (P2 no longer
+  restricts to a single endpoint). Removal of Pollinations as default requires governance approval.
+- See ADR-005 for full decision record and alternatives considered.
 
 ### P3 — No Root Required
 
@@ -99,9 +117,12 @@ Rules:
 - The keystore encryption key MUST be derived from device fingerprint + user PIN; no static keys.
 - The guided setup UI MAY pre-fill credentials temporarily — they MUST be written to the
   keystore and cleared from memory before the setup step completes.
-- Outbound network MUST be allowlisted. Permitted hosts only:
-  `gen.pollinations.ai`, `api.elevenlabs.io`, `sip.suii.us`, `stun.l.google.com`
-- Any connection to an unlisted host requires explicit user approval + governance sign-off.
+- Outbound network MUST be allowlisted. The permitted host list is dynamic: it is derived
+  from all `base_url` fields in `config/models.yaml` plus the security anchors in
+  `config/security.yaml` (`api.elevenlabs.io`, `sip.suii.us`, `stun.l.google.com`,
+  `api.deepgram.com`). See `gurujee/ai/client.py::_build_allowlist()`.
+- Any connection to a host not in `models.yaml` or `security.yaml` requires explicit user
+  approval + governance sign-off.
 
 ### P5 — Zero-Touch Setup for Non-Technical Users (AMENDED 1.1.0)
 
@@ -253,4 +274,4 @@ Rules:
 - PRs that touch architecture or cross-cutting concerns MUST include a Constitution Check
   confirming no P1–P10 violations, or explicitly documenting approved exceptions.
 
-**Version**: 1.1.1 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-12
+**Version**: 1.2.0 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-12

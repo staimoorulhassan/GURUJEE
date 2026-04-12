@@ -61,12 +61,14 @@ def create_app(gateway: "GatewayDaemon") -> FastAPI:
     from gurujee.server.routers.agents import router as agents_router
     from gurujee.server.routers.automate import router as automate_router
     from gurujee.server.routers.notifications import router as notifications_router
+    from gurujee.server.routers.models import router as models_router
 
     app.include_router(health_router)
     app.include_router(chat_router)
     app.include_router(agents_router)
     app.include_router(automate_router)
     app.include_router(notifications_router)
+    app.include_router(models_router)
 
     # WebSocket endpoint
     from gurujee.server.websocket import router as ws_router

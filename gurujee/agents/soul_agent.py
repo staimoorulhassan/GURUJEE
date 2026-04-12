@@ -92,10 +92,11 @@ class SoulAgent(BaseAgent):
         messages.extend(recent_turns)
         messages.append({"role": "user", "content": user_text})
 
+        routed_model = self._ai_client.get_model_for_agent("soul")
         full_text = ""
         is_interrupted = False
         try:
-            async for token in self._ai_client.stream_chat(messages):
+            async for token in self._ai_client.stream_chat(messages, model=routed_model):
                 full_text += token
                 await self.send(
                     "broadcast",
