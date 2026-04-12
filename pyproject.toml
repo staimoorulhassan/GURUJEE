@@ -4,19 +4,50 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gurujee"
-version = "0.1.0"
-description = "Autonomous AI companion running on Android via Termux"
+version = "1.0.0"
+description = "Autonomous AI agent platform for Android — your wise, ever-present companion"
 requires-python = ">=3.11"
 readme = "README.md"
+license = { text = "MIT" }
+dependencies = [
+    "openai>=1.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    "httpx>=0.25.0",
+    "python-multipart>=0.0.9",
+    "textual>=0.47.0",
+    "rich>=13.0.0",
+    "cryptography>=41.0.0",
+    "PyYAML>=6.0",
+    "ruamel.yaml>=0.18.0",
+    "tenacity>=8.2.0",
+    "elevenlabs>=1.0.0",
+    "faster-whisper>=1.0.0",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "responses>=0.25.0",
+]
 
 [project.scripts]
 gurujee = "gurujee.__main__:main"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gurujee*"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--tb=short"
+addopts = "--tb=short --cov=gurujee --cov-report=term-missing"
 
 [tool.coverage.run]
 source = ["gurujee"]
-omit = ["tests/*", "gurujee/__main__.py"]
+omit = ["tests/*", "gurujee/tui/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

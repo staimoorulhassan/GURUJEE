@@ -161,6 +161,43 @@ class TestDaemonStep:
             assert boot_path.stat().st_mode & stat.S_IXUSR
 
 
+class TestBootScriptContent:
+    """T070 — verify Termux:Boot script has the required shebang and command."""
+
+    def test_boot_script_has_correct_shebang(self, tmp_path: Path) -> None:
+        from gurujee.setup.wizard import SetupWizard
+
+        src_soul = tmp_path / "agents" / "soul_identity.yaml"
+        src_soul.parent.mkdir()
+        src_soul.write_text("name: GURUJEE\n", encoding="utf-8")
+
+        wizard = SetupWizard(data_dir=tmp_path)
+        state = _make_partial_state([])
+        boot_path = tmp_path / "start-gurujee.sh"
+
+        with (
+            patch.object(wizard, "_start_daemon_background", return_value=None),
+            patch.object(wizard, "_poll_daemon_ready", return_value=True),
+            patch.object(wizard, "_boot_script_path", boot_path),
+        ):
+            wizard._step_daemons_inner(state)
+
+        content = boot_path.read_text(encoding="utf-8")
+        assert content.startswith("#!/data/data/com.termux/files/usr/bin/bash"), (
+            "Boot script must use the Termux bash shebang"
+        )
+        assert "python -m gurujee --headless" in content, (
+            "Boot script must launch gurujee in headless mode"
+        )
+        assert "data/boot.log" in content, (
+            "Boot script must redirect output to data/boot.log"
+        )
+        # Must be executable on POSIX (no-op on Windows)
+        import sys
+        if sys.platform != "win32":
+            assert boot_path.stat().st_mode & stat.S_IXUSR
+
+
 class TestFullHappyPath:
     def test_full_run_writes_completed_at(self, tmp_path: Path) -> None:
         from gurujee.setup.wizard import SetupWizard
