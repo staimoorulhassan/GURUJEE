@@ -95,7 +95,10 @@ def create_app(gateway: "GatewayDaemon") -> FastAPI:
         async def serve_static(filename: str) -> FileResponse:
             base_dir = _STATIC_DIR.resolve()
             try:
-                target = (base_dir / filename).resolve()
+                requested = Path(filename)
+                if requested.is_absolute() or ".." in requested.parts:
+                    raise ValueError("invalid static path")
+                target = base_dir.joinpath(*requested.parts).resolve()
                 target.relative_to(base_dir)
             except (ValueError, OSError):
                 return FileResponse(str(base_dir / "index.html"))
