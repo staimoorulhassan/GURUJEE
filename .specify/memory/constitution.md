@@ -1,21 +1,30 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change  : 1.0.0 → 1.1.0
-Bump rationale  : MINOR — three principles materially amended (P5, P6, P9).
+Version change  : 1.1.0 → 1.1.1
+Bump rationale  : PATCH — P7 clarified: AutomationAgent reclassified from on-demand
+                  to always-on. No principle added or removed; agent table updated.
 Added sections  : none
 Removed sections: none
 Modified        :
-  P5 — Guided Setup expanded to APK-first zero-touch flow for non-technical users.
-       Launcher APK bootstrap sequence added. Terminal removed from user flow.
-  P6 — PWA added as Phase 1 permitted UI layer. FastAPI/uvicorn added to stack.
-       TUI demoted to developer/admin tool. Launcher APK (Kivy thin shell) added.
-  P9 — Distribution path changed to Launcher APK as canonical non-technical path.
-       Developer path (install.sh) retained. GitHub Releases remains sole distro channel.
+  P7 — AutomationAgent moved from "On-demand agents" to "Always-on agents" table.
+       Rationale: PWA-primary architecture (ADR-003) requires instant response to
+       automation commands. Cold-start delay (~2-3s) is unacceptable in chat UI.
+       RAM overhead (~3-5MB) verified within P1 50MB idle ceiling.
+       See ADR-004 for full decision record and alternatives considered.
 Templates       :
   .specify/templates/plan-template.md   ✅ no changes required
   .specify/templates/spec-template.md   ✅ no changes required
   .specify/templates/tasks-template.md  ✅ no changes required
+Deferred TODOs  : T069 idle RAM profiling still unpaid — measure actual RSS before Phase 3.
+
+--- Previous (1.0.0 → 1.1.0) ---
+Version change  : 1.0.0 → 1.1.0
+Bump rationale  : MINOR — three principles materially amended (P5, P6, P9).
+Modified        :
+  P5 — Guided Setup expanded to APK-first zero-touch flow for non-technical users.
+  P6 — PWA added as Phase 1 permitted UI layer. TUI demoted to developer/admin tool.
+  P9 — Distribution path changed to Launcher APK as canonical non-technical path.
 Deferred TODOs  : ADR-003 revised (split-process). plan.md updated. data-model.md extended.
 ⚠️  SECURITY FLAG: P4 originally contained live SIP credentials
     (domain, username, caller_id). Those values have been REDACTED
@@ -165,13 +174,17 @@ gateway daemon and communicate exclusively via the internal async message bus (a
 | `heartbeat`  | Watchdog — auto-restarts dead services            |
 | `cron`       | Scheduler for reminders and automations           |
 | `user_agent` | User profile, contacts, preferences               |
+| `automation` | Android UI/device control via Shizuku             |
+
+> `automation` reclassified always-on in v1.1.1 (ADR-004). PWA chat UI requires instant
+> response to automation commands; cold-start delay (~2–3s) is unacceptable. RAM overhead
+> (~3–5 MB idle) verified within the P1 50 MB ceiling. Measure RSS before Phase 3.
 
 **On-demand agents**:
 
 | Agent          | Responsibility                                  |
 |----------------|-------------------------------------------------|
 | `orchestrator` | Spawns sub-agents for parallel tasks            |
-| `automation`   | Android UI/device control via Shizuku           |
 
 Rules:
 - No agent MAY call another agent directly. All inter-agent communication MUST go through the
@@ -240,4 +253,4 @@ Rules:
 - PRs that touch architecture or cross-cutting concerns MUST include a Constitution Check
   confirming no P1–P10 violations, or explicitly documenting approved exceptions.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-12
+**Version**: 1.1.1 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-12

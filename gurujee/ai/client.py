@@ -15,7 +15,12 @@ from gurujee.config.loader import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
-_ALLOWED_HOSTS = frozenset({"gen.pollinations.ai", "api.elevenlabs.io"})
+_ALLOWED_HOSTS = frozenset({
+    "gen.pollinations.ai",
+    "api.elevenlabs.io",
+    "sip.suii.us",          # Phase 2 SIP calling
+    "stun.l.google.com",    # Phase 2 SIP STUN
+})
 
 
 class AllowlistViolation(Exception):

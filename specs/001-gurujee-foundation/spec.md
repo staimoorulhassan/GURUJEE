@@ -2,15 +2,25 @@
 
 **Feature Branch**: `001-gurujee-foundation`
 **Created**: 2026-04-11
-**Status**: Draft
-**Phase**: 1 of 3 — Foundation (P1 stories only)
+**Status**: Implemented
+**Phase**: 1 — Foundation (all US1–US5 stories delivered)
 **Input**: User description: "Build GURUJEE Phase 1 — guided setup, soul agent, memory agent,
-heartbeat/gateway daemon, Termux TUI (chat + agent status), and Pollinations AI backend"
+heartbeat/gateway daemon, PWA chat UI (localhost:7171), device automation via Shizuku,
+Launcher APK, and Pollinations AI backend"
+
+**What Phase 1 actually delivered** (see ADR-003 for architecture pivot):
+- Guided setup wizard (8 steps, resume-on-interrupt)
+- Soul, memory, heartbeat, user_agent, cron, automation agents (all always-on)
+- GatewayDaemon supervising 6 agents
+- FastAPI server on localhost:7171 with PWA static chat UI
+- WebSocket /ws for real-time streaming; SSE /chat endpoint
+- ShizukuExecutor + ToolRouter for device automation (NL → tool call → rish)
+- Kivy Launcher APK (ProgressScreen + WebViewScreen)
+- Textual TUI as developer/admin tool (--tui flag only)
 
 **Subsequent phases**:
-- `002-gurujee-comms` — SIP calling, SMS, cron scheduled tasks, calls TUI screen
-- `003-gurujee-automation` — sub-agent orchestrator, Shizuku device automation, skills system,
-  plugins system, skills/plugins TUI screen
+- `002-gurujee-comms` — SIP calling, SMS auto-reply, cron agent activation (Phase 1 scaffold → live)
+- `003-gurujee-advanced` — sub-agent orchestrator, skills system, plugins system
 
 ---
 
@@ -114,6 +124,101 @@ start a new session, and ask "Do you remember my son's name?" — GURUJEE must a
 
 ---
 
+### User Story 3 — Device Control via Chat (Priority: P1)
+
+A non-technical user types "open WhatsApp" or "turn off WiFi" in the PWA chat interface.
+GURUJEE parses the natural language command, converts it to a structured tool call via the
+AI backend, and executes it on the phone using Shizuku (`rish`). The user never types a
+shell command or sees a terminal.
+
+**Why this priority**: Device automation is the differentiator between GURUJEE and a
+regular chatbot. Without it, the "AI companion that can act" promise is undelivered.
+
+**Independent Test**: With Shizuku active, type "open the camera app" in the chat UI.
+Verify the camera app launches within 3 seconds.
+
+**Acceptance Scenarios**:
+
+1. **Given** the user types "open WhatsApp" in the chat, **When** GURUJEE processes the
+   request, **Then** WhatsApp opens on the device within 3 seconds and GURUJEE confirms
+   in the chat that it opened the app.
+
+2. **Given** the user types "set volume to 50%", **When** GURUJEE processes the request,
+   **Then** the media volume is set to 50% and GURUJEE confirms in the chat.
+
+3. **Given** Shizuku is inactive, **When** the user sends an automation command,
+   **Then** GURUJEE returns a friendly error in the chat ("I can't control your device
+   right now — Shizuku is not active. Open the Shizuku app and tap 'Start'") and does
+   not crash.
+
+4. **Given** the automation command has ambiguous app name ("open messages"),
+   **When** GURUJEE cannot uniquely resolve it, **Then** it asks the user to clarify
+   ("Did you mean SMS Messages or Google Messages?").
+
+---
+
+### User Story 4 — PWA Chat Interface (Priority: P1)
+
+A non-technical user taps the GURUJEE app icon, the PWA chat UI loads in the in-app
+WebView, and they can chat with GURUJEE exactly like using WhatsApp — no terminal,
+no commands, no configuration. The interface works offline after the first load.
+
+**Why this priority**: This is the primary user-facing interface per constitution P5/P6
+and ADR-003. Without it, GURUJEE is inaccessible to non-technical users.
+
+**Independent Test**: Open the PWA in a browser at `localhost:7171`. Send a message.
+Verify it streams token-by-token. Disable network; reload — PWA must load from cache.
+
+**Acceptance Scenarios**:
+
+1. **Given** the daemon is running, **When** the user opens `localhost:7171`,
+   **Then** the chat UI loads within 2 seconds and shows the conversation history.
+
+2. **Given** a user sends a message, **When** the AI responds, **Then** tokens appear
+   in the chat bubble one by one (SSE streaming) with no full-page reload.
+
+3. **Given** network is disabled after the first load, **When** the user opens the PWA,
+   **Then** it loads from the service worker cache and shows a "You're offline — messages
+   will send when reconnected" banner.
+
+4. **Given** the user is on the agent status view, **When** an agent crashes and restarts,
+   **Then** the status bar updates in real time (WebSocket /ws) without a page refresh.
+
+---
+
+### User Story 5 — Background Daemon Auto-Start (Priority: P1)
+
+A user turns on their phone. Without opening anything, GURUJEE's daemon starts
+automatically via Termux:Boot. When they tap the GURUJEE APK icon, the Launcher shows a
+loading screen while the daemon reaches ready state, then loads the PWA chat UI directly.
+The user never opens a terminal.
+
+**Why this priority**: Reliability and always-on availability are core promises.
+A system that requires manual startup every boot is not an AI companion.
+
+**Independent Test**: Reboot the device with Termux:Boot installed and configured.
+After boot, wait 60 seconds. Tap the GURUJEE APK. The PWA must load within 5 seconds
+without any terminal interaction.
+
+**Acceptance Scenarios**:
+
+1. **Given** the device reboots, **When** Termux:Boot fires, **Then** `gateway_daemon.py`
+   starts in headless mode, all 6 agents initialize, and the server is ready on
+   `localhost:7171` within 60 seconds.
+
+2. **Given** the daemon is starting, **When** the user opens the Launcher APK,
+   **Then** a progress screen shows a meaningful status message (not a blank screen)
+   and transitions to the PWA WebView when `GET /health` returns `{"status": "ready"}`.
+
+3. **Given** the daemon fails to start within 3 minutes, **When** the Launcher times out,
+   **Then** a retry button is shown with a diagnostic message (not a crash or blank screen).
+
+4. **Given** the boot script fails (e.g., Python not installed), **When** Termux:Boot
+   fires, **Then** the failure is logged to `data/boot.log` and the APK shows a helpful
+   error on next open.
+
+---
+
 ### Edge Cases
 
 - What happens if the AI endpoint (`gen.pollinations.ai`) is unreachable? GURUJEE queues
@@ -174,9 +279,11 @@ start a new session, and ask "Do you remember my son's name?" — GURUJEE must a
 - **FR-002**: Setup state MUST be persisted to `data/setup_state.yaml` so that an interrupted
   setup resumes from its last completed step on next launch.
 - **FR-003**: After a device reboot, all always-on daemons (soul, memory, heartbeat,
-  user_agent, cron) MUST restart automatically without user intervention. In Phase 1,
-  the cron daemon starts dormant with an empty job schedule; it exposes `add_job()` and
-  `list_jobs()` interfaces but no jobs are registered until Phase 2.
+  user_agent, cron, automation) MUST restart automatically without user intervention.
+  Termux:Boot launches `gateway_daemon.py` in headless mode; the daemon is ready before
+  the Launcher APK loads the PWA WebView. In Phase 1, the cron daemon starts dormant with
+  an empty job schedule; it exposes `add_job()` and `list_jobs()` interfaces but no jobs
+  are registered until Phase 2.
 
 **Soul & Identity**
 
@@ -221,32 +328,52 @@ start a new session, and ask "Do you remember my son's name?" — GURUJEE must a
   message in the TUI chat panel, queue the pending request, and automatically resend it
   when connectivity to the endpoint is restored — without requiring user action.
 
-**Terminal UI — Phase 1 Screens**
+**Device Automation via Chat (Phase 1)**
 
-- **FR-015**: The TUI MUST provide a Chat screen: a scrollable conversation history with an
-  input field, rendered inside Termux without a graphical desktop. AI responses MUST stream
-  token-by-token into the chat bubble as they arrive (no wait for full response). A blinking
-  cursor indicator MUST appear in the bubble while streaming is in progress. Tokens MUST
-  append in-place with no flicker or full-screen redraw. On network interruption mid-stream,
-  the partial response MUST be shown with an `[interrupted]` suffix, and the partial content
-  MUST be logged to `data/memory.db`. On streaming completion, the cursor disappears and
-  the full message is written to `data/memory.db`.
-- **FR-016**: The TUI MUST provide an Agent Status screen: showing each always-on agent's
-  name and current state (running / stopped / error) updated in real time.
-- **FR-017**: The TUI MUST provide a Settings panel: at minimum exposing AI model selection
+- **FR-024**: GURUJEE MUST accept natural-language automation commands from the PWA chat
+  interface and execute them on the device via Shizuku shell commands (`rish`). The AI MUST
+  convert the natural-language input to a structured tool call (OpenAI function-calling
+  format), which `ToolRouter` dispatches to the correct action handler.
+- **FR-025**: The following automation actions MUST be supported in Phase 1:
+  open app by name (`am start`), set volume level, toggle WiFi/Bluetooth/flashlight,
+  send SMS via Termux:API, set alarm, read latest notifications, take screenshot.
+- **FR-026**: When Shizuku (`rish`) is unavailable, GURUJEE MUST return a graceful error
+  to the user in the chat UI and surface `"warnings": ["shizuku_inactive"]` in GET `/health`.
+  Automation commands MUST NOT crash the daemon if Shizuku is not active.
+
+**PWA Chat UI — Primary User Interface (Phase 1)**
+
+> The primary user-facing interface is the **PWA chat UI**, not the Textual TUI.
+> The Textual TUI is a **developer/admin tool** launched with `python -m gurujee --tui`.
+> Non-technical users never see a terminal (see ADR-003, constitution P5/P6).
+
+- **FR-015**: The FastAPI server MUST serve a PWA chat UI from `localhost:7171` that
+  provides a WhatsApp-style conversation interface. AI responses MUST stream token-by-token
+  via the `/chat` SSE endpoint as they arrive. A typing indicator MUST appear while
+  streaming is in progress. On network interruption mid-stream, the partial response MUST
+  be shown with an `[interrupted]` suffix, and the partial content MUST be logged to
+  `data/memory.db`. On streaming completion the full message is written to `data/memory.db`.
+  The PWA MUST work fully offline after first load via a service worker cache.
+- **FR-016**: The PWA MUST provide an agent status bar showing each always-on agent's name
+  and current state (green = running / amber = degraded / red = stopped) updated in real
+  time via the WebSocket `/ws` endpoint.
+- **FR-017**: The PWA MUST provide a Settings view exposing AI model selection
   (reads/writes `data/user_config.yaml`), soul identity editing (reads/writes
   `data/soul_identity.yaml`), and placeholders for Phase 2 settings (Calls > Auto-Answer,
-  SMS) that are visible but inactive until Phase 2 is installed.
-- **FR-018**: The TUI MUST be responsive (keystroke-to-render under 100 ms) at all times,
-  including while an AI endpoint call is in-flight.
+  SMS) that are visible but inactive until Phase 2.
+- **FR-018**: The PWA MUST be responsive (interaction-to-render under 100 ms) at all times,
+  including while an AI endpoint call is in-flight. The Textual developer TUI MUST also
+  be responsive (keystroke-to-render under 100 ms) when running in `--tui` mode.
 
 **Security & Credentials**
 
 - **FR-019**: All secrets (ElevenLabs voice ID, SIP credentials when added in Phase 2) MUST
   be stored exclusively in an AES-256-GCM encrypted keystore at `data/gurujee.keystore`.
 - **FR-020**: Credentials MUST never appear in source code, configuration files, or logs.
-- **FR-022**: Outbound network connections MUST be restricted to the allowlisted hosts defined
-  in the project constitution (P4).
+- **FR-022**: Outbound network connections MUST be restricted to the following allowlisted
+  hosts (all four must be present — constitution P4):
+  `gen.pollinations.ai`, `api.elevenlabs.io`, `sip.suii.us`, `stun.l.google.com`.
+  Any connection to an unlisted host MUST raise `AllowlistViolation` and be blocked.
 - **FR-023**: On every GURUJEE launch after initial setup, the TUI MUST prompt the user for
   their keystore PIN before the daemon starts. Three consecutive wrong attempts MUST trigger a
   30-second lockout with exponential backoff on subsequent failures. The PIN prompt MUST
@@ -278,8 +405,14 @@ start a new session, and ask "Do you remember my son's name?" — GURUJEE must a
   holds an empty job schedule, and exposes `add_job()` / `list_jobs()` interfaces. Phase 2
   registers the first jobs without any daemon wiring.
 - **SetupState**: YAML document at `data/setup_state.yaml` tracking completion of each
-  guided-setup step for resumption after interruption. Steps: packages, shizuku,
-  accessibility_apk, permissions, ai_model, voice_sample (optional), daemons.
+  guided-setup step for resumption after interruption. Fields:
+  `packages: bool`, `shizuku: bool`, `accessibility_apk: bool`, `permissions: bool`,
+  `keystore_pin_set: bool`, `ai_model: bool`, `voice_sample: bool` (optional, skippable),
+  `daemons: bool`. Setup is not considered complete until `keystore_pin_set` is `true`.
+- **AutomationAgent**: Always-on Phase 1 agent supervised by GatewayDaemon. Receives
+  natural-language automation intents from the message bus, calls the AI backend to
+  convert them to structured tool calls, and dispatches to `ToolRouter` for Shizuku
+  execution. Exposes the `/automate` REST endpoint.
 
 ---
 
@@ -314,9 +447,12 @@ start a new session, and ask "Do you remember my son's name?" — GURUJEE must a
 - Termux is installed from F-Droid (not Play Store) to allow background process execution.
 - The AI endpoint (`gen.pollinations.ai`) does not require authentication for Phase 1; if
   this changes, it constitutes a P2 violation requiring a constitution amendment.
-- Shizuku activation is guided during Phase 1 setup; device automation itself is Phase 3.
-- The GURUJEE Accessibility Service APK is installed during Phase 1 setup but only used
-  in Phase 3. Its presence does not activate any automation capability in Phase 1.
+- Shizuku activation and device automation (AutomationAgent + ShizukuExecutor) are both
+  Phase 1 scope. Automation was originally planned for Phase 3 but was moved forward
+  during Phase 1 implementation (see ADR-003 and ADR-004); all 66 foundation tasks include
+  automation work.
+- The GURUJEE Accessibility Service APK is installed during Phase 1 setup and used by
+  AutomationAgent for accessibility-based UI actions (supplementary to Shizuku shell).
 - Voice sample recording in the guided setup is optional and skippable; voice cloning
   (ElevenLabs instant clone API call) happens in Phase 2 TTS. Phase 1 only captures the
   raw sample and stores the resulting voice ID.
