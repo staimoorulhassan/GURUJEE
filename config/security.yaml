@@ -1,0 +1,36 @@
+# GURUJEE Network Security Configuration
+# ========================================
+# This file defines the security anchors for the GURUJEE network allowlist.
+# These hosts are always permitted regardless of the provider catalogue.
+# See gurujee/ai/client.py::_build_allowlist() and P4 in constitution.md.
+#
+# IMPORTANT: Do NOT add AI provider endpoints here — those belong in models.yaml.
+# This file is for non-AI services required by the platform.
+
+# Security anchors — always permitted (Phase 2+ platform services)
+anchor_hosts:
+  - host: api.elevenlabs.io
+    purpose: "ElevenLabs TTS — AI voice synthesis"
+    phase: 1
+
+  - host: sip.suii.us
+    purpose: "SIP calling server — Phase 2 voice calls"
+    phase: 2
+
+  - host: stun.l.google.com
+    purpose: "STUN server for SIP NAT traversal — Phase 2"
+    phase: 2
+
+  - host: api.deepgram.com
+    purpose: "Deepgram cloud STT — optional Phase 2 upgrade from Whisper"
+    phase: 2
+    optional: true
+
+# Outbound policy
+policy:
+  # Deny all hosts not in the dynamic allowlist (models.yaml base_urls + anchor_hosts above)
+  default_action: deny
+  # Log denied attempts to data/automation.log
+  log_denied: true
+  # User-approved one-off hosts (populated by setup UI; stored in keystore)
+  user_approved_hosts: []

@@ -35,10 +35,16 @@ def _setup_server_log() -> None:
 
 
 def create_app(gateway: "GatewayDaemon") -> FastAPI:
-    """Create and configure the FastAPI app.
-
-    *gateway* is injected into each router via app.state so handlers can
-    publish/subscribe messages without an import cycle.
+    """
+    Create and configure the FastAPI application for the GURUJEE server.
+    
+    Configures file-based logging and CORS, registers API and WebSocket routers, mounts PWA static files when present, and installs a global exception handler. The provided gateway is attached to app.state.gateway so request handlers and routers can publish/subscribe without import cycles.
+    
+    Parameters:
+        gateway (GatewayDaemon): Gateway instance made available to handlers at request.app.state.gateway.
+    
+    Returns:
+        FastAPI: A configured FastAPI application instance ready to run.
     """
     app = FastAPI(title="GURUJEE", version="1.0.0")
 
@@ -61,12 +67,14 @@ def create_app(gateway: "GatewayDaemon") -> FastAPI:
     from gurujee.server.routers.agents import router as agents_router
     from gurujee.server.routers.automate import router as automate_router
     from gurujee.server.routers.notifications import router as notifications_router
+    from gurujee.server.routers.models import router as models_router
 
     app.include_router(health_router)
     app.include_router(chat_router)
     app.include_router(agents_router)
     app.include_router(automate_router)
     app.include_router(notifications_router)
+    app.include_router(models_router)
 
     # WebSocket endpoint
     from gurujee.server.websocket import router as ws_router
