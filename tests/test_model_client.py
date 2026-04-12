@@ -76,6 +76,15 @@ user_providers: []
 
 @pytest.fixture
 def client(tmp_path: Path) -> AIClient:
+    """
+    Create an AIClient configured with a minimal models YAML and a user config that sets the active model to `pollinations/nova-fast`.
+    
+    Parameters:
+        tmp_path (Path): Temporary directory provided by pytest.
+    
+    Returns:
+        AIClient: An AIClient instance initialized with `models_config_path` and `user_config_path` inside `tmp_path`.
+    """
     models_path = tmp_path / "models.yaml"
     models_path.write_text(MINIMAL_MODELS_YAML, encoding="utf-8")
     user_config_path = tmp_path / "user_config.yaml"
@@ -88,6 +97,17 @@ def client(tmp_path: Path) -> AIClient:
 
 @pytest.fixture
 def client_with_keystore(tmp_path: Path) -> AIClient:
+    """
+    Pytest fixture that returns an AIClient configured with a mocked keystore and minimal models/user configuration.
+    
+    Creates model and user config files under `tmp_path`, provides a keystore whose `get` returns "sk-test-key-001", and instantiates AIClient with those paths and the mocked keystore.
+    
+    Parameters:
+        tmp_path (Path): Temporary directory for writing the test models and user config files.
+    
+    Returns:
+        AIClient: Client instance using the created config files and a keystore mock where `get` yields "sk-test-key-001".
+    """
     models_path = tmp_path / "models.yaml"
     models_path.write_text(MINIMAL_MODELS_YAML, encoding="utf-8")
     user_config_path = tmp_path / "user_config.yaml"
@@ -271,6 +291,12 @@ class TestStreamChatRouting:
         tokens = ["hi", " ", "there"]
 
         async def _fake(*args, **kwargs):
+            """
+            Asynchronous generator that yields the values from the surrounding `tokens` sequence in order.
+            
+            Yields:
+            	Each value from the iterable `tokens`, yielded one at a time.
+            """
             for t in tokens:
                 yield t
 
@@ -287,6 +313,12 @@ class TestStreamChatRouting:
     @pytest.mark.asyncio
     async def test_model_id_forwarded_to_stream(self, client: AIClient) -> None:
         async def _noop(*args, **kwargs):
+            """
+            Yield a single "ok" token from an async generator.
+            
+            Returns:
+                Async generator that yields the string "ok" once.
+            """
             yield "ok"
 
         with patch.object(client, "_stream", side_effect=_noop) as mock:
@@ -300,6 +332,15 @@ class TestStreamChatRouting:
 
 
 async def _consume(gen: Any) -> list:
+    """
+    Collect all items produced by an async iterator or async generator into a list.
+    
+    Parameters:
+        gen (Any): An asynchronous iterable or async generator yielding items.
+    
+    Returns:
+        list: The collected items in iteration order.
+    """
     result = []
     async for item in gen:
         result.append(item)

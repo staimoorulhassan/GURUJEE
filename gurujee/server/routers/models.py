@@ -16,7 +16,17 @@ router = APIRouter(prefix="/api/models", tags=["models"])
 
 
 def _get_ai_client(request: Request) -> AIClient:
-    """Resolve AIClient from the gateway daemon attached to app.state."""
+    """
+    Obtain an AIClient instance for model catalogue queries.
+    
+    Attempts to return an AIClient attached to the application's gateway daemon (via request.app.state.gateway._soul_agent._ai_client). If no attached client is found, returns a fallback read-only AIClient configured to read the model catalogue from paths derived from the GURUJEE_CONFIG_DIR and GURUJEE_DATA_DIR environment variables (defaulting to "config" and "data"), i.e. models.yaml and user_config.yaml.
+    
+    Parameters:
+        request (Request): FastAPI request used to access the application state.
+    
+    Returns:
+        AIClient: An AIClient bound to the gateway daemon if available, otherwise a read-only AIClient configured for catalogue queries.
+    """
     gateway = getattr(request.app.state, "gateway", None)
     if gateway is not None:
         soul = getattr(gateway, "_soul_agent", None)
@@ -33,16 +43,20 @@ def _get_ai_client(request: Request) -> AIClient:
 
 @router.get("/providers")
 async def list_providers(request: Request) -> JSONResponse:
-    """Return the full provider catalogue from config/models.yaml.
-
-    Response shape:
-    ```json
+    """
+    Return the provider catalog of available AI model providers.
+    
+    The response content is a mapping with the following structure:
+    
     {
       "builtin": { "<provider>": { "label": "...", "models": [...] } },
       "custom":  { "<provider>": { "label": "...", "base_url": "...", "models": [...] } },
       "default": { "primary": "...", "fallbacks": [...] }
     }
-    ```
+    
+    Returns:
+        JSONResponse: JSON response whose content is the provider catalogue described above,
+        or an error object {"error": "<message>"} with HTTP status 500 on failure.
     """
     try:
         client = _get_ai_client(request)

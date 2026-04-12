@@ -63,6 +63,16 @@ class SoulAgent(BaseAgent):
     # ------------------------------------------------------------------ #
 
     async def _handle_chat_request(self, msg: Message) -> None:
+        """
+        Handle an incoming chat request by obtaining memory context, streaming an AI response, broadcasting tokens, and storing the conversation.
+        
+        This coroutine extracts the user's text from msg.payload["text"], requests contextual memory (waits up to 2 seconds), constructs a system prompt, and streams a model response token-by-token. Each token is broadcast as a CHAT_CHUNK. On stream errors the function broadcasts a CHAT_ERROR, enqueues the request for later, and marks the response as interrupted. After streaming (successful or interrupted) it always broadcasts CHAT_RESPONSE_COMPLETE containing the accumulated text and interruption flag. If any response text was produced, the exchange is stored to memory as a conversation fact.
+        
+        Parameters:
+            msg (Message): Incoming message with at least:
+                - payload["text"]: the user's chat input.
+                - id: request identifier used when sending replies and broadcasts.
+        """
         user_text: str = msg.payload.get("text", "")
 
         # Request memory context
