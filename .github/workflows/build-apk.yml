@@ -63,6 +63,15 @@ jobs:
           echo "=== APK files found ==="
           find bin/ -name "*.apk" 2>/dev/null || echo "No APK in bin/ — check build.log"
 
+      - name: Verify APK was produced
+        run: |
+          APK_COUNT=$(find bin/ -name "*.apk" 2>/dev/null | wc -l)
+          if [ "$APK_COUNT" -eq 0 ]; then
+            echo "ERROR: No APK found in bin/ — build failed."
+            exit 1
+          fi
+          echo "APK(s) found: $(find bin/ -name '*.apk')"
+
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -98,5 +107,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gurujee-apk
-          path: gurujee/*.apk
+          path: bin/*.apk
           if-no-files-found: warn
