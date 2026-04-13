@@ -53,6 +53,9 @@ fi
 # Install Python dependencies
 pip install -r "$GURUJEE_DIR/requirements.txt"
 
+# Install GURUJEE package in development mode
+pip install -e "$GURUJEE_DIR"
+
 # Create data directory if missing
 mkdir -p "$GURUJEE_DIR/data"
 
