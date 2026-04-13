@@ -54,11 +54,16 @@ fi
 pip install -r "$GURUJEE_DIR/requirements.txt"
 
 # Install GURUJEE package in development mode
+echo "Installing GURUJEE package..."
 pip install -e "$GURUJEE_DIR"
+if [ $? -ne 0 ]; then
+    echo "Failed to install GURUJEE package. Please check the error above."
+    exit 1
+fi
 
 # Create data directory if missing
 mkdir -p "$GURUJEE_DIR/data"
 
 echo "=== Starting setup wizard ==="
 cd "$GURUJEE_DIR"
-python -m gurujee.setup
+python -c "from gurujee.setup.wizard import SetupWizard; SetupWizard().run()"
