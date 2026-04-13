@@ -25,7 +25,7 @@ echo "Install directory: $GURUJEE_DIR"
 
 # Update and install base packages
 pkg update -y && pkg upgrade -y
-pkg install -y python git
+pkg install -y python git rust
 
 # Install Rust toolchain for Python packages requiring compilation
 pkg install -y rust binutils clang make
