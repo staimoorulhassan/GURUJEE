@@ -41,7 +41,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          key: buildozer-${{ runner.os }}-${{ hashFiles('launcher/buildozer.spec') }}
           restore-keys: |
             buildozer-${{ runner.os }}-
 
@@ -59,18 +59,19 @@ jobs:
 
       - name: Build APK (debug)
         run: |
-          buildozer android debug 2>&1 | tee build.log
+          cd launcher
+          buildozer android debug 2>&1 | tee ../build.log
           echo "=== APK files found ==="
           find bin/ -name "*.apk" 2>/dev/null || echo "No APK in bin/ — check build.log"
 
       - name: Verify APK was produced
         run: |
-          APK_COUNT=$(find bin/ -name "*.apk" 2>/dev/null | wc -l)
+          APK_COUNT=$(find launcher/bin/ -name "*.apk" 2>/dev/null | wc -l)
           if [ "$APK_COUNT" -eq 0 ]; then
-            echo "ERROR: No APK found in bin/ — build failed."
+            echo "ERROR: No APK found in launcher/bin/ — build failed."
             exit 1
           fi
-          echo "APK(s) found: $(find bin/ -name '*.apk')"
+          echo "APK(s) found: $(find launcher/bin/ -name '*.apk')"
 
       - name: Upload build log on failure
         if: failure()
@@ -83,7 +84,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: bin/*.apk
+          files: launcher/bin/*.apk
           name: GURUJEE ${{ github.ref_name }}
           body: |
             ## Install GURUJEE
@@ -107,5 +108,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gurujee-apk
-          path: bin/*.apk
+          path: launcher/bin/*.apk
           if-no-files-found: warn

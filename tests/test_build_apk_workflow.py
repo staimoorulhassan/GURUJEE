@@ -1,11 +1,11 @@
-"""Tests for .github/workflows/build-apk.yml — covers the changes in this PR.
+"""Tests for .github/workflows/build-apk.yml.
 
-PR change: artifact upload path corrected from `bin/*.apk` to `gurujee/*.apk`
-in the "Also upload APK as artifact" step.
+Build runs as: cd launcher && buildozer android debug
+APKs are produced in launcher/bin/.
 
-The "Upload APK to GitHub Release" step (softprops/action-gh-release) was NOT
-changed and still uses `bin/*.apk`; tests assert both paths to guard against
-accidental cross-modification.
+Both upload steps (release and artifact) reference launcher/bin/*.apk.
+Tests guard against regressions to incorrect paths (bin/*.apk at repo root
+or gurujee/*.apk which is the Python source module, never an APK output).
 """
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ class TestWorkflowYamlValidity:
 # ---------------------------------------------------------------------------
 
 class TestArtifactUploadPath:
-    """Verifies the artifact upload path was updated from bin/ to gurujee/."""
+    """Verifies the artifact upload path points to the real buildozer output directory."""
 
     def _artifact_upload_step(self) -> dict:
         steps = _get_steps(_load_workflow())
@@ -92,20 +92,20 @@ class TestArtifactUploadPath:
         """The 'Also upload APK as artifact' step must exist."""
         self._artifact_upload_step()  # raises if not found
 
-    def test_artifact_upload_uses_gurujee_path(self):
-        """Artifact upload path must point to gurujee/*.apk (not bin/*.apk)."""
+    def test_artifact_upload_uses_launcher_bin_path(self):
+        """Artifact upload path must point to launcher/bin/*.apk (buildozer output)."""
         step = self._artifact_upload_step()
         upload_path = step.get("with", {}).get("path", "")
-        assert upload_path == "gurujee/*.apk", (
-            f"Expected artifact path 'gurujee/*.apk', got '{upload_path}'"
+        assert upload_path == "launcher/bin/*.apk", (
+            f"Expected artifact path 'launcher/bin/*.apk', got '{upload_path}'"
         )
 
-    def test_artifact_upload_does_not_use_bin_path(self):
-        """Artifact upload path must NOT be bin/*.apk (the old incorrect path)."""
+    def test_artifact_upload_does_not_use_root_bin_path(self):
+        """Artifact upload path must NOT be bare bin/*.apk (repo root, not buildozer output)."""
         step = self._artifact_upload_step()
         upload_path = step.get("with", {}).get("path", "")
-        assert "bin/" not in upload_path, (
-            f"Artifact upload path still references bin/: '{upload_path}'"
+        assert upload_path != "bin/*.apk", (
+            f"Artifact upload path must not be bare 'bin/*.apk'; got '{upload_path}'"
         )
 
     def test_artifact_upload_name_is_gurujee_apk(self):
@@ -160,12 +160,12 @@ class TestReleaseUploadStepUnchanged:
         """The 'Upload APK to GitHub Release' step must still exist."""
         self._release_step()
 
-    def test_release_step_files_path_unchanged(self):
-        """Release step files path must still be bin/*.apk (was not changed in PR)."""
+    def test_release_step_files_path(self):
+        """Release step files path must point to launcher/bin/*.apk (buildozer output)."""
         step = self._release_step()
         files_path = step.get("with", {}).get("files", "")
-        assert files_path == "bin/*.apk", (
-            f"Release step files path should still be 'bin/*.apk'; got '{files_path}'"
+        assert files_path == "launcher/bin/*.apk", (
+            f"Release step files path should be 'launcher/bin/*.apk'; got '{files_path}'"
         )
 
     def test_release_step_uses_softprops_action(self):
@@ -181,11 +181,11 @@ class TestReleaseUploadStepUnchanged:
 # Tests: both upload steps are distinct and independent
 # ---------------------------------------------------------------------------
 
-class TestTwoUploadStepsAreDistinct:
-    """Ensures the two upload steps have different paths (one bin/, one gurujee/)."""
+class TestUploadPathsAreCorrect:
+    """Ensures both upload steps reference the real buildozer output: launcher/bin/."""
 
-    def test_two_upload_artifact_steps_use_different_paths(self):
-        """The upload-artifact step for APKs must use gurujee/*.apk, not bin/*.apk."""
+    def test_upload_artifact_step_uses_launcher_bin(self):
+        """The upload-artifact step for APKs must use launcher/bin/*.apk."""
         steps = _get_steps(_load_workflow())
         apk_upload_paths = [
             step["with"]["path"]
@@ -196,26 +196,25 @@ class TestTwoUploadStepsAreDistinct:
         assert len(apk_upload_paths) == 1, (
             f"Expected exactly 1 upload-artifact step with an *.apk path; found: {apk_upload_paths}"
         )
-        assert apk_upload_paths[0] == "gurujee/*.apk", (
-            f"APK upload-artifact path must be 'gurujee/*.apk'; got '{apk_upload_paths[0]}'"
+        assert apk_upload_paths[0] == "launcher/bin/*.apk", (
+            f"APK upload-artifact path must be 'launcher/bin/*.apk'; got '{apk_upload_paths[0]}'"
         )
 
-    def test_gurujee_path_not_duplicated_in_workflow(self):
-        """gurujee/*.apk must appear exactly once in the workflow."""
-        text = WORKFLOW_FILE.read_text(encoding="utf-8")
-        count = text.count("gurujee/*.apk")
-        assert count == 1, (
-            f"'gurujee/*.apk' should appear exactly once in the workflow; found {count} times"
-        )
-
-    def test_bin_path_in_workflow_only_for_release_step(self):
-        """bin/*.apk must appear only in the release step, not in artifact upload."""
+    def test_no_bare_bin_path_in_upload_artifact_step(self):
+        """upload-artifact step must not use bare bin/*.apk (repo root)."""
         steps = _get_steps(_load_workflow())
         artifact_step = _find_step(steps, "Also upload APK as artifact")
         assert artifact_step is not None
         artifact_path = artifact_step.get("with", {}).get("path", "")
-        assert "bin/" not in artifact_path, (
-            f"bin/ path leaked into artifact upload step: '{artifact_path}'"
+        assert artifact_path != "bin/*.apk", (
+            f"Artifact upload path must not be bare 'bin/*.apk'; got '{artifact_path}'"
+        )
+
+    def test_no_gurujee_module_path_in_upload_steps(self):
+        """Neither upload step should reference gurujee/*.apk (Python module dir, not APK output)."""
+        text = WORKFLOW_FILE.read_text(encoding="utf-8")
+        assert "gurujee/*.apk" not in text, (
+            "gurujee/*.apk found in workflow — APKs are in launcher/bin/, not the Python module dir"
         )
 
 
