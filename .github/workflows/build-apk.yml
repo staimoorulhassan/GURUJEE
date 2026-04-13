@@ -1,0 +1,85 @@
+name: Build GURUJEE APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk \
+            python3-pip autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev \
+            libssl-dev libffi-dev libsqlite3-dev \
+            libltdl-dev cmake ninja-build
+
+      - name: Install Buildozer and Cython
+        run: |
+          pip install --upgrade pip
+          pip install buildozer cython
+
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+
+      - name: Build APK (debug)
+        run: |
+          buildozer android debug 2>&1 | tee build.log
+          echo "=== APK files found ==="
+          find bin/ -name "*.apk" 2>/dev/null || echo "No APK in bin/ — check build.log"
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+
+      - name: Upload APK artifact (every build)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gurujee-debug-apk
+          path: bin/*.apk
+          if-no-files-found: warn
+
+      - name: Upload APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: bin/*.apk
+          name: GURUJEE ${{ github.ref_name }}
+          body: |
+            ## Install GURUJEE
+
+            **Option A — Termux (recommended, no APK needed):**
+            ```bash
+            curl -sL https://raw.githubusercontent.com/staimoorulhassan/GURUJEE/main/install.sh | bash
+            ```
+
+            **Option B — APK launcher:**
+            1. Download `gurujee-*.apk` below
+            2. Enable **Install from Unknown Sources** in Android Settings
+            3. Install and open — the app guides you through the rest
+
+            **Requirements:** Android 9+ (API 28+), 2 GB RAM minimum
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

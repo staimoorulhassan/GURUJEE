@@ -1,0 +1,167 @@
+#:kivy 2.3
+
+# ---------------------------------------------------------------------------
+# Colour palette
+# ---------------------------------------------------------------------------
+#:set BG        (0.039, 0.039, 0.039, 1)   # #0a0a0a — near-black
+#:set AMBER     (0.941, 0.647, 0.000, 1)   # #f0a500
+#:set AMBER_DIM (0.600, 0.400, 0.000, 1)
+#:set WHITE     (1,     1,     1,     1)
+#:set GREY      (0.45,  0.45,  0.45,  1)
+
+# ---------------------------------------------------------------------------
+# SplashScreen
+# ---------------------------------------------------------------------------
+<SplashScreen>:
+    canvas.before:
+        Color:
+            rgba: BG
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(32)
+        spacing: dp(16)
+
+        Widget:
+            size_hint_y: 0.15
+
+        # Logo / wordmark
+        Image:
+            source: "assets/logo.png"
+            size_hint: None, None
+            size: dp(120), dp(120)
+            pos_hint: {"center_x": 0.5}
+            allow_stretch: True
+
+        Label:
+            text: "GURUJEE"
+            font_size: sp(42)
+            bold: True
+            color: AMBER
+            size_hint_y: None
+            height: dp(56)
+            halign: "center"
+
+        Label:
+            text: "Your AI Companion"
+            font_size: sp(16)
+            color: GREY
+            size_hint_y: None
+            height: dp(28)
+            halign: "center"
+
+        Widget:
+            size_hint_y: 0.05
+
+        Spinner:
+            id: spinner
+            size_hint: None, None
+            size: dp(48), dp(48)
+            pos_hint: {"center_x": 0.5}
+            active: True
+            color: AMBER
+
+        Label:
+            id: status_label
+            text: "Checking your device…"
+            font_size: sp(14)
+            color: GREY
+            halign: "center"
+            text_size: self.width, None
+            size_hint_y: None
+            height: dp(64)
+
+        Button:
+            id: install_btn
+            text: "Install Termux (F-Droid)"
+            font_size: sp(16)
+            bold: True
+            size_hint: None, None
+            size: dp(280), dp(52)
+            pos_hint: {"center_x": 0.5}
+            background_normal: ""
+            background_color: AMBER
+            color: (0, 0, 0, 1)
+            opacity: 0
+            disabled: True
+            on_release: root.open_fdroid()
+
+        Widget:
+            size_hint_y: 1
+
+# ---------------------------------------------------------------------------
+# SetupScreen
+# ---------------------------------------------------------------------------
+<SetupScreen>:
+    canvas.before:
+        Color:
+            rgba: BG
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(24)
+        spacing: dp(12)
+
+        Label:
+            text: "Setting up GURUJEE…"
+            font_size: sp(24)
+            bold: True
+            color: AMBER
+            size_hint_y: None
+            height: dp(48)
+            halign: "center"
+
+        Label:
+            text: "install.sh is running inside Termux.\nPlease keep this screen open."
+            font_size: sp(13)
+            color: GREY
+            halign: "center"
+            size_hint_y: None
+            height: dp(48)
+            text_size: self.width, None
+
+        ScrollView:
+            size_hint_y: 1
+            do_scroll_x: False
+
+            Label:
+                id: log_label
+                font_size: sp(12)
+                color: WHITE
+                halign: "left"
+                valign: "top"
+                text_size: self.width, None
+                size_hint_y: None
+                height: self.texture_size[1]
+                padding: dp(8), dp(8)
+
+        Spinner:
+            size_hint: None, None
+            size: dp(36), dp(36)
+            pos_hint: {"center_x": 0.5}
+            active: True
+            color: AMBER
+
+# ---------------------------------------------------------------------------
+# ChatScreen
+# ---------------------------------------------------------------------------
+<ChatScreen>:
+    canvas.before:
+        Color:
+            rgba: BG
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    Label:
+        text: "Opening GURUJEE…"
+        font_size: sp(18)
+        color: AMBER
+        halign: "center"
+        pos_hint: {"center_x": 0.5, "center_y": 0.5}
