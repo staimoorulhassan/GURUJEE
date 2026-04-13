@@ -76,7 +76,7 @@ jobs:
 
             **Requirements:** Android 9+, 2GB RAM, internet for first setup
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Also upload APK as artifact (for non-tag builds)
         uses: actions/upload-artifact@v4
