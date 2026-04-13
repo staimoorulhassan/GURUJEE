@@ -41,23 +41,51 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-${{ runner.os }}-${{ hashFiles('launcher/buildozer.spec') }}
+          key: buildozer-${{ runner.os }}-${{ hashFiles('launcher/buildozer.spec') }}-sdk34
           restore-keys: |
             buildozer-${{ runner.os }}-
 
-      # Pre-seed Android SDK license hashes so sdkmanager never prompts
-      # interactively. These are the canonical SHA1s from Google's SDK ToS.
-      - name: Accept Android SDK licenses (pre-seed)
+      # Install Android cmdline-tools and create the legacy tools/bin/sdkmanager
+      # symlink that buildozer expects. Google moved sdkmanager from tools/bin/
+      # to cmdline-tools/latest/bin/ in SDK r26; buildozer still probes the old path.
+      - name: Set up Android SDK (cmdline-tools + sdkmanager shim)
+        env:
+          ANDROID_SDK_ROOT: /home/runner/.buildozer/android/platform/android-sdk
         run: |
-          mkdir -p "$HOME/.buildozer/android/platform/android-sdk/licenses"
+          SDK="$ANDROID_SDK_ROOT"
+          mkdir -p "$SDK"
+
+          # Download cmdline-tools (stable r11 — 11076708)
+          wget -q \
+            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+            -O /tmp/cmdline-tools.zip
+          unzip -q /tmp/cmdline-tools.zip -d /tmp/clt
+          mkdir -p "$SDK/cmdline-tools/latest"
+          mv /tmp/clt/cmdline-tools/* "$SDK/cmdline-tools/latest/"
+
+          # Shim: point the legacy path buildozer probes to the real sdkmanager
+          mkdir -p "$SDK/tools/bin"
+          ln -sf "$SDK/cmdline-tools/latest/bin/sdkmanager" "$SDK/tools/bin/sdkmanager"
+
+          # Pre-seed license files so sdkmanager never prompts interactively
+          mkdir -p "$SDK/licenses"
           printf '\n24333f8a63b6825ea9c5514f83c2829b004d1fee\nd56f5187479451eabf01fb78af6dfcb131a6481e\n84831b9409646a918e30573bab4c9c91346d8abd\n' \
-            > "$HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-license"
+            > "$SDK/licenses/android-sdk-license"
           printf '\n84831b9409646a918e30573bab4c9c91346d8abd\n' \
-            > "$HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-preview-license"
+            > "$SDK/licenses/android-sdk-preview-license"
           printf '\n33b6ad264991c446f2f65a2b0e6ba94f5be58e98\n' \
-            > "$HOME/.buildozer/android/platform/android-sdk/licenses/android-googletv-license"
+            > "$SDK/licenses/android-googletv-license"
+
+          # Pre-install the SDK components buildozer needs so it skips re-download
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
 
       - name: Build APK (debug)
+        env:
+          ANDROID_SDK_ROOT: /home/runner/.buildozer/android/platform/android-sdk
+          ANDROID_HOME: /home/runner/.buildozer/android/platform/android-sdk
         run: |
           cd launcher
           buildozer android debug 2>&1 | tee ../build.log
