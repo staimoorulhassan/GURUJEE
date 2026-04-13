@@ -318,11 +318,15 @@ without any terminal interaction.
 
 **AI Backend**
 
-- **FR-012**: All AI inference MUST route through the single endpoint defined in the
-  constitution (P2): `https://gen.pollinations.ai/v1`, OpenAI-compatible, no API key.
+- **FR-012**: All AI inference MUST route through the provider catalogue defined in
+  `config/models.yaml` (ADR-005). The default zero-key provider is `pollinations`
+  (`base_url: https://gen.pollinations.ai/v1`, OpenAI-compatible). Any provider entry
+  in the catalogue is permitted. Model references MUST use the `provider/model-id` format
+  (e.g. `pollinations/nova-fast`). No endpoint URL MUST be hardcoded in logic.
 - **FR-013**: The available AI models MUST be defined in the version-controlled
   `config/models.yaml`. The user's active model selection MUST be stored in
-  `data/user_config.yaml` under the `active_model` key; the default is `nova-fast`.
+  `data/user_config.yaml` under the `active_model` key; the default is
+  `pollinations/nova-fast` (`provider/model-id` format per P2 v1.2.0).
   No model ID MUST be hardcoded in logic.
 - **FR-014**: When the AI endpoint is unreachable, GURUJEE MUST display a clear error
   message in the TUI chat panel, queue the pending request, and automatically resend it
@@ -336,7 +340,9 @@ without any terminal interaction.
   format), which `ToolRouter` dispatches to the correct action handler.
 - **FR-025**: The following automation actions MUST be supported in Phase 1:
   open app by name (`am start`), set volume level, toggle WiFi/Bluetooth/flashlight,
-  send SMS via Termux:API, set alarm, read latest notifications, take screenshot.
+  one-shot SMS sending via Termux:API (user explicitly requests "send SMS to X saying Y"),
+  set alarm, read latest notifications, take screenshot. Automated SMS auto-reply and
+  polling are Phase 2 (002-gurujee-comms); only user-initiated one-shot SMS is Phase 1.
 - **FR-026**: When Shizuku (`rish`) is unavailable, GURUJEE MUST return a graceful error
   to the user in the chat UI and surface `"warnings": ["shizuku_inactive"]` in GET `/health`.
   Automation commands MUST NOT crash the daemon if Shizuku is not active.
@@ -370,10 +376,13 @@ without any terminal interaction.
 - **FR-019**: All secrets (ElevenLabs voice ID, SIP credentials when added in Phase 2) MUST
   be stored exclusively in an AES-256-GCM encrypted keystore at `data/gurujee.keystore`.
 - **FR-020**: Credentials MUST never appear in source code, configuration files, or logs.
-- **FR-022**: Outbound network connections MUST be restricted to the following allowlisted
-  hosts (all four must be present — constitution P4):
-  `gen.pollinations.ai`, `api.elevenlabs.io`, `sip.suii.us`, `stun.l.google.com`.
-  Any connection to an unlisted host MUST raise `AllowlistViolation` and be blocked.
+- **FR-022**: The network allowlist MUST be built dynamically at daemon startup by reading
+  all `base_url` fields from `config/models.yaml` (all active providers) plus the four
+  security-anchor hosts from `config/security.yaml` (`api.elevenlabs.io`, `sip.suii.us`,
+  `stun.l.google.com`, `api.deepgram.com`). Any outbound connection to a host not in this
+  derived list MUST raise `AllowlistViolation` and be blocked unless the user explicitly
+  approves it via the PWA settings UI. User-added custom providers are automatically added
+  to the allowlist on save.
 - **FR-023**: On every GURUJEE launch after initial setup, the TUI MUST prompt the user for
   their keystore PIN before the daemon starts. Three consecutive wrong attempts MUST trigger a
   30-second lockout with exponential backoff on subsequent failures. The PIN prompt MUST
@@ -457,7 +466,8 @@ without any terminal interaction.
   (ElevenLabs instant clone API call) happens in Phase 2 TTS. Phase 1 only captures the
   raw sample and stores the resulting voice ID.
 - Memory retrieval uses keyword/tag search with no embedding model in v1, per ADR-002.
-- Termux:API companion app is not required for Phase 1 (SMS/call integration is Phase 2).
+- Termux:API companion app IS required for Phase 1 one-shot SMS sending (FR-025).
+  Automated SMS auto-reply and polling are Phase 2 (002-gurujee-comms).
 - The Settings panel in Phase 1 exposes soul identity editing (`data/soul_identity.yaml`)
   and AI model selection (written to `data/user_config.yaml`); Calls and SMS settings are
   visible but inactive scaffolding for Phase 2.

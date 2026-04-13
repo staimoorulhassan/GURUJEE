@@ -31,7 +31,7 @@ No user story work begins here.
 - [X] T002 Write `pyproject.toml` with package metadata, pytest config (asyncio_mode=auto, testpaths=tests, cov target 70%), and dependency list matching requirements.txt
 - [X] T003 [P] Update `requirements.txt` — add `fastapi>=0.110`, `uvicorn>=0.29`, `httpx>=0.25`, `python-multipart>=0.0.9` alongside existing deps
 - [X] T004 [P] Write `.gitignore` — exclude `data/`, `*.keystore`, `*.log`, `__pycache__/`, `*.pyc`, `.env`, `launcher/bin/`, `launcher/.buildozer/`
-- [X] T005 [P] Write `config/models.yaml` — AI model catalogue: endpoint `https://gen.pollinations.ai/v1`, models list: `nova-fast`, `gemini-fast`, `gemini-search`, `openai-fast`, `grok`, `mistral`; default: `nova-fast`
+- [X] T005 [P] Write `config/models.yaml` — full provider catalogue per ADR-005: `builtin_providers` tier (pollinations as default zero-key provider with its 6 models, plus anthropic/openai/google/etc with `auth_env` fields), `custom_providers` tier (ollama, openrouter, litellm, deepseek, groq, mistral, etc with `base_url`), `agent_model_routing` map (all 6 agents → `pollinations/nova-fast`), `failover` config, `transcription_providers`, `image_providers`. Default: `pollinations/nova-fast` (`provider/model-id` format). All API keys referenced by `auth_env` keystore key name — never stored in this file.
 - [X] T006 [P] Write `config/agents.yaml` — heartbeat interval: 30s, ping timeout: 5s, max restart count: 10, memory short_term_maxlen: 10, log rotation: 5MB×3
 - [X] T007 [P] Write `config/voice.yaml` — provider: elevenlabs, model: turbo, streaming: true, sample_duration_seconds: 30
 - [X] T008 [P] Write `config/automation.yaml` — shizuku_rish_path: `/data/user/0/moe.shizuku.privileged.api/rish`, action_timeout_seconds: 10, screenshot_path: `/data/data/com.termux/files/home/gurujee_screenshot.png`
@@ -107,7 +107,7 @@ contains "Ali".
 
 ---
 
-## Phase 5: User Story 3 — FastAPI Server + PWA Chat UI (Priority: P1)
+## Phase 5: User Story 4 — PWA Chat Interface (Priority: P1)
 
 **Goal**: Non-technical user opens a WhatsApp-style chat interface in a WebView or browser.
 Messages stream token-by-token. Agent status visible in a subtle status bar. Works offline
@@ -119,7 +119,7 @@ response in chat bubbles. Disable network. Reload — PWA loads from service wor
 ### Implementation for User Story 3
 
 - [X] T032 [US3] Implement `gurujee/server/app.py` — `create_app(gateway: GatewayDaemon) → FastAPI`: creates FastAPI instance, mounts `StaticFiles` at `/static` pointing to `gurujee/server/static/`, registers all routers (chat, agents, automate, notifications, health), registers WebSocket endpoint `/ws`, sets CORS to `127.0.0.1` only, configures `uvicorn.Config(app, host="127.0.0.1", port=7171, loop="asyncio", workers=1)` and starts `Server.serve()` as asyncio task from `GatewayDaemon`
-- [X] T033 [US3] Implement `gurujee/server/routers/chat.py` — `POST /chat`: accepts `{"message": str}`, publishes `CHAT_REQUEST` to MessageBus, subscribes to `CHAT_STREAM_CHUNK` and `CHAT_RESPONSE` replies, streams via `StreamingResponse(media_type="text/event-stream")`; chunk format: `data: {"chunk": "...", "done": false}\n\n`; final: `data: {"chunk": "", "done": true}\n\n`; error: `data: {"error": "...", "done": true}\n\n`
+- [X] T033 [US3] Implement `gurujee/server/routers/chat.py` — `POST /chat`: accepts `{"message": str}`, publishes `CHAT_REQUEST` to MessageBus, subscribes to `CHAT_STREAM_CHUNK` and `CHAT_RESPONSE` replies, streams via `StreamingResponse(media_type="text/event-stream")`; chunk format: `data: {"chunk": "...", "done": false}\n\n`; final: `data: {"chunk": "", "done": true}\n\n`; error: `data: {"error": "...", "done": true}\n\n`; **interrupted-stream**: on network drop, client disconnect, or LLM error mid-stream, publish `CHAT_RESPONSE` on the bus with `payload.metadata.interrupted = True`; MemoryAgent persists partial content to `data/memory.db` with `[interrupted]` suffix appended; PWA renders partial text with ⚠ interrupted indicator
 - [X] T034 [US3] Implement `gurujee/server/routers/health.py` — `GET /health`: returns `{"status": "ready", "agents": {name: status}}` when GatewayDaemon is fully started; `{"status": "starting"}` during startup; used by Launcher APK to poll readiness
 - [X] T035 [US3] Implement `gurujee/server/routers/agents.py` — `GET /agents`: returns snapshot of all `AgentState` entries from `GatewayDaemon.agent_states` as JSON list `[{"name": str, "status": str, "restart_count": int, "last_error": str|null}]`
 - [X] T036 [US3] Implement `gurujee/server/websocket.py` — `WebSocket /ws`: on connect registers client in `GatewayDaemon.ws_clients` set; on agent status change or automation result broadcasts JSON event to all connected clients; handles `ping`/`pong` keep-alive; removes client on disconnect
@@ -134,7 +134,7 @@ response in chat bubbles. Disable network. Reload — PWA loads from service wor
 
 ---
 
-## Phase 6: User Story 4 — Shizuku Device Automation (Priority: P1)
+## Phase 6: User Story 3 — Device Control via Chat (Priority: P1)
 
 **Goal**: User says "open WhatsApp", "set volume to 50%", "turn WiFi off", "what are my
 notifications". GURUJEE executes via Shizuku shell commands and replies with results.
@@ -203,7 +203,7 @@ Sees progress screen. Within 3 minutes, sees PWA chat UI in WebView. Sends a mes
 **Purpose**: Security hardening, RAM profiling, logging, error handling, and final integration.
 
 - [X] T066 Add `RotatingFileHandler(maxBytes=5*1024*1024, backupCount=3)` to `data/heartbeat.log`, `data/memory.log`, `data/automation.log`, `data/server.log`, `data/boot.log` in each respective module; grep all Python files for `print(` and replace with logger calls
-- [X] T067 [P] Verify network allowlist enforcement in `gurujee/ai/client.py` — pre-flight check against `{"gen.pollinations.ai", "api.elevenlabs.io"}` before every outbound call; non-allowlisted host raises `NetworkPolicyError`; log blocked attempts to `data/memory.log`
+- [X] T067 [P] Verify network allowlist enforcement in `gurujee/ai/client.py` — `_build_allowlist()` reads `base_url` from every provider in `config/models.yaml` (builtin + custom), extracts hostnames, adds four security-anchor hostnames from `config/security.yaml` (`api.elevenlabs.io`, `sip.suii.us`, `stun.l.google.com`, `api.deepgram.com`), deduplicates, returns as `frozenset`; rebuilds on every daemon restart; non-allowlisted host raises `AllowlistViolation`; logs full allowlist to `data/security.log` on build; logs blocked attempts to `data/security.log`
 - [X] T068 [P] Add `GURUJEE_DATA_DIR` environment variable override to `gurujee/config/loader.py` — allows CI to point to a temp directory; all `pathlib.Path` data references route through `ConfigLoader.data_dir`
 - [X] T069 Profile daemon + uvicorn idle RAM: run `python -m memory_profiler gurujee/__main__.py --headless`; if RSS > 50 MB, apply lazy import to heaviest dependency; document measured value in `specs/001-gurujee-foundation/plan.md` NFR budget row (P1 constitutional requirement — MUST NOT be skipped)
 - [X] T070 [P] Verify Termux:Boot script created by `SetupWizard._step_daemons()` at `~/.termux/boot/start-gurujee.sh` has correct content: `#!/data/data/com.termux/files/usr/bin/bash`, `cd ~/gurujee`, `python -m gurujee --headless >> data/boot.log 2>&1 &`; add test to `test_setup_wizard.py`
@@ -213,6 +213,8 @@ Sees progress screen. Within 3 minutes, sees PWA chat UI in WebView. Sends a mes
 - [X] T074 Update `specs/001-gurujee-foundation/quickstart.md` — add split-layer developer setup: how to run `python -m gurujee --headless`, open PWA at `localhost:7171`, use `--tui`, run tests with coverage, build launcher APK with `buildozer android debug`
 
 **Final Checkpoint**: `pytest` ≥70% passes. Idle daemon RSS ≤50 MB confirmed. `GET /health` → ready. `http://localhost:7171` shows PWA chat UI. "Open WhatsApp" automation works. `install.sh` completes on clean Termux. All logs rotating. Launcher APK installs and reaches chat screen.
+
+- [X] T075 Create `config/security.yaml` — four security-anchor hosts (`api.elevenlabs.io`, `sip.suii.us`, `stun.l.google.com`, `api.deepgram.com`) with `purpose` and `required_for` fields; `unknown_host_policy: prompt_user`; `keystore` config (AES-256-GCM, PBKDF2, 260_000 iterations); `pin_policy` (min 4, max 8, 3 attempts, 30s lockout, ×2 multiplier). This file is version-controlled and contains NO secrets — only hostnames and policy settings. Referenced by `_build_allowlist()` in `gurujee/ai/client.py`.
 
 ---
 

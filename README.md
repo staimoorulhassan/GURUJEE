@@ -39,6 +39,20 @@ Think of it as **OpenClaw for Android**.
 
 ## Installation
 
+### Before you start — get a free Pollinations API key
+
+GURUJEE uses **Pollinations AI** as its default AI provider (free, no credit card).
+You need a free API key before running setup:
+
+1. Go to **https://auth.pollinations.ai** on your phone
+2. Sign up — it takes about 30 seconds
+3. Copy your API key
+4. The setup wizard will ask for it automatically
+
+You can also add it later via **Settings → AI Models → Pollinations**.
+
+---
+
 ### Option A — One-tap Install (Recommended)
 
 1. Open Termux on your Android phone

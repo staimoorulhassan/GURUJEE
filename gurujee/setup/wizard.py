@@ -47,12 +47,13 @@ _ORDERED_STEPS = [
     "accessibility_apk",
     "permissions",
     "keystore_pin",
+    "pollinations_key",
     "ai_model",
     "voice_sample",
     "daemons",
 ]
 
-_OPTIONAL_STEPS = {"accessibility_apk", "voice_sample"}
+_OPTIONAL_STEPS = {"accessibility_apk", "voice_sample", "pollinations_key"}
 
 # SHA-256 of the official GURUJEE Accessibility Service APK (placeholder — update on release)
 _EXPECTED_APK_SHA256 = "0" * 64  # TODO: replace with real checksum on first release
@@ -87,6 +88,7 @@ class SetupWizard:
             "accessibility_apk": self._step_accessibility_apk_inner,
             "permissions": self._step_permissions_inner,
             "keystore_pin": self._step_keystore_pin_inner,
+            "pollinations_key": self._step_pollinations_key_inner,
             "ai_model": self._step_ai_model_inner,
             "voice_sample": self._step_voice_sample_inner,
             "daemons": self._step_daemons_inner,
@@ -286,6 +288,47 @@ class SetupWizard:
             return
 
         raise SetupStepError("pin_setup_failed", "Failed to set PIN after 3 attempts.")
+
+    def _step_pollinations_key_inner(self, state: Optional[dict] = None) -> None:
+        """Prompt the user to enter their free Pollinations API key."""
+        from gurujee.keystore.keystore import Keystore  # local import to avoid circular
+
+        _console.print(Panel(
+            "[bold amber]Pollinations API Key (Optional)[/bold amber]\n\n"
+            "GURUJEE uses [bold]Pollinations AI[/bold] as its default provider.\n"
+            "A [bold green]free[/bold green] API key is required — no credit card.\n\n"
+            "Get yours at: [bold]https://auth.pollinations.ai[/bold]\n"
+            "(Sign up takes ~30 seconds)\n\n"
+            "You can skip this step and add the key later via\n"
+            "Settings → AI Models → Pollinations.",
+            title="Step 5.5: Pollinations API Key",
+        ))
+
+        poll_key = Prompt.ask(
+            "Enter your Pollinations API key (press Enter to skip)",
+            password=True,
+            default="",
+        )
+
+        if poll_key.strip():
+            keystore_path = self._data_dir / "gurujee.keystore"
+            try:
+                ks = Keystore(keystore_path)
+                ks.set("POLLINATIONS_API_KEY", poll_key.strip())
+                _console.print("[green]✓ Pollinations API key saved to keystore.[/green]")
+                if state and "steps" in state:
+                    state["steps"]["pollinations_key"]["pollinations_key_set"] = True
+            except Exception as exc:
+                _console.print(f"[yellow]⚠ Could not save key: {exc}. Add it later in Settings.[/yellow]")
+                if state and "steps" in state:
+                    state["steps"]["pollinations_key"]["skipped"] = True
+        else:
+            _console.print(
+                "[yellow]⚠ Skipped — GURUJEE may not work without a Pollinations key.\n"
+                "Add it later: Settings → AI Models → Pollinations[/yellow]"
+            )
+            if state and "steps" in state:
+                state["steps"]["pollinations_key"]["skipped"] = True
 
     def _step_ai_model_inner(self, state: Optional[dict] = None) -> None:
         """Let the user choose their AI model and write it to data/user_config.yaml."""

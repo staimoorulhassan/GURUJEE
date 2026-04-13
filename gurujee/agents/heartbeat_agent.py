@@ -13,12 +13,15 @@ from gurujee.agents.base_agent import BaseAgent, Message, MessageBus, MessageTyp
 
 logger = logging.getLogger(__name__)
 
-_PING_INTERVAL = 30.0  # seconds between ping rounds
-_PONG_TIMEOUT = 5.0    # seconds to wait for pongs after broadcast
+_PING_INTERVAL = 8.0   # seconds between ping rounds (worst-case detection = 10s → satisfies SC-007)
+_PONG_TIMEOUT = 2.0    # seconds to wait for pongs after broadcast
 
 
 class HeartbeatAgent(BaseAgent):
-    """Broadcasts HEARTBEAT_PING every 30 s and signals the gateway if an agent fails to pong."""
+    """Broadcasts HEARTBEAT_PING every 8 s and signals the gateway if an agent fails to pong.
+
+    Worst-case detection = 8s (ping interval) + 2s (pong timeout) = 10s, satisfying SC-007.
+    """
 
     def __init__(
         self,
