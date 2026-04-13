@@ -53,12 +53,25 @@ curl -sL https://raw.githubusercontent.com/staimoorulhassan/GURUJEE/main/install
 
 ---
 
-### Option B — Download APK + Manual Bootstrap
+### Option B — Download APK (Easiest for non-technical users)
 
-1. Download the latest APK from [GitHub Releases](https://github.com/staimoorulhassan/GURUJEE/releases)
-2. Enable **Install from Unknown Sources** in Android Settings
-3. Install the APK
-4. Open GURUJEE — it will guide you through the rest
+> **APK is building automatically via GitHub Actions.**
+> Check [Releases](https://github.com/staimoorulhassan/GURUJEE/releases) in ~20 minutes.
+> For immediate install, use Option A (Termux command above).
+
+1. Go to [GitHub Releases](https://github.com/staimoorulhassan/GURUJEE/releases/latest)
+2. Download `gurujee-1.0.0-debug.apk`
+3. On your Android phone:
+   - Go to **Settings → Security → Install Unknown Apps**
+   - Allow your browser or file manager to install APKs
+4. Open the downloaded APK and tap **Install**
+5. Open **GURUJEE** from your app drawer
+6. The app will check for Termux and set everything up automatically
+7. Wait 3–5 minutes for first-time setup to complete
+
+> **Note:** You need Termux installed from F-Droid for GURUJEE to work.
+> If it's not installed, GURUJEE will show a button to install it first.
+> Get Termux here: https://f-droid.org/packages/com.termux/
 
 ---
 
@@ -487,93 +500,20 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). The project follows spec-driven developm
 
 ---
 
-## Spec-Driven Development (SDD) Workflow
-
-GURUJEE now uses a Spec-Driven Development (SDD) workflow to systematically build features. This ensures high-quality, well-documented, and testable implementations.
-
-### Available Commands
-
-- **`/sp.specify`** - Create or update a feature specification from a natural language description
-- **`/sp.plan`** - Create a technical implementation plan
-- **`/sp.tasks`** - Generate actionable, dependency-ordered tasks
-- **`/sp.clarify`** - Clarify underspecified areas in the spec
-- **`/sp.analyze`** - Perform cross-artifact consistency analysis
-- **`/sp.implement`** - Execute the implementation plan
-- **`/sp.phr`** - Create Prompt History Records
-- **`/sp.checklist`** - Generate specification quality checklists
-- **`/sp.git.commit_pr`** - Auto-commit changes and create pull requests
-
-### Workflow Overview
-
-1. **Specify** - Define the feature with `/sp.specify`
-2. **Plan** - Create technical architecture with `/sp.plan`
-3. **Clarify** - Resolve ambiguities with `/sp.clarify`
-4. **Task** - Generate implementation tasks with `/sp.tasks`
-5. **Implement** - Execute tasks with `/sp.implement`
-6. **Commit** - Auto-commit with `/sp.git.commit_pr`
-
-This workflow ensures every feature is thoroughly designed, documented, and tested before implementation begins.
-
----
-
-## Building the APK (Android Package)
-
-GURUJEE includes a Launcher APK that can be built for distribution. The Launcher provides a native Android interface that wraps the Termux-based application.
-
-### Prerequisites for APK Building
-
-- Linux or macOS (Windows requires WSL2)
-- [Buildozer](https://buildozer.readthedocs.io/) installed
-- Android SDK and NDK set up (Buildozer handles this automatically on first run)
-- ~5 GB free disk space for build dependencies
-
-### Build Steps
-
-1. **Clone the repository and navigate to the launcher directory:**
-
-```bash
-git clone https://github.com/staimoorulhassan/GURUJEE.git
-cd GURUJEE/launcher
-```
-
-2. **Run Buildozer to build the APK:**
-
-```bash
-buildozer -v android debug
-```
-
-This will download all required Android SDK components and build the APK. The first build takes 10-15 minutes; subsequent builds are faster.
-
-3. **Locate the APK:**
-
-The built APK will be at:
-`launcher/bin/Gurujee-debug.apk`
-
-### Installation
-
-- Transfer the APK to your Android device
-- Enable "Install from unknown sources" for your file manager or browser
-- Tap the APK to install
-
-### Usage on Android
-
-**Option 1: Termux (Original Method)**
-- Install Termux from F-Droid
-- Run the installation script as documented in the Installation section
-- Use the TUI or PWA interface
-
-**Option 2: Launcher APK (Recommended for Non-Technical Users)**
-- Install the built APK
-- The Launcher provides a simplified interface that starts the daemon and loads the PWA
-- No terminal knowledge required
-- This is the primary user-facing interface per constitution P5/P6
-
-**Option 3: PWA (Progressive Web App)**
-- After setup, access `localhost:7171` in your Android browser
-- Add to Home Screen for app-like experience
-
----
-
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
+
+---
+
+## Credits
+
+Built by **Taimoor** using [spec-kit-plus](https://github.com/panaversity/spec-kit-plus) and Claude Code.
+
+Inspired by [OpenClaw](https://openclaw.ai) — the original personal AI agent platform.
+
+Powered by [Pollinations AI](https://pollinations.ai) (free default), [ElevenLabs](https://elevenlabs.io) (voice), and [Shizuku](https://shizuku.rikka.app) (device access).
+
+---
+
+*GURUJEE — Respected teacher. Always learning. Always present.*

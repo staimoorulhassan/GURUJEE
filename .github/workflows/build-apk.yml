@@ -54,13 +54,6 @@ jobs:
           name: build-log
           path: build.log
 
-      - name: Upload APK artifact (every build)
-        uses: actions/upload-artifact@v4
-        with:
-          name: gurujee-debug-apk
-          path: bin/*.apk
-          if-no-files-found: warn
-
       - name: Upload APK to GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
@@ -70,16 +63,24 @@ jobs:
           body: |
             ## Install GURUJEE
 
-            **Option A — Termux (recommended, no APK needed):**
+            **Option A (Termux — recommended):**
             ```bash
             curl -sL https://raw.githubusercontent.com/staimoorulhassan/GURUJEE/main/install.sh | bash
             ```
 
-            **Option B — APK launcher:**
+            **Option B (APK):**
             1. Download `gurujee-*.apk` below
-            2. Enable **Install from Unknown Sources** in Android Settings
-            3. Install and open — the app guides you through the rest
+            2. Enable Unknown Sources in Android Settings
+            3. Install the APK
+            4. Open GURUJEE — guided setup runs automatically
 
-            **Requirements:** Android 9+ (API 28+), 2 GB RAM minimum
+            **Requirements:** Android 9+, 2GB RAM, internet for first setup
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Also upload APK as artifact (for non-tag builds)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gurujee-apk
+          path: bin/*.apk
+          if-no-files-found: warn
