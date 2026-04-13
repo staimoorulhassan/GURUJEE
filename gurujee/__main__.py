@@ -2,8 +2,14 @@
 
 Usage:
   python -m gurujee                # TUI + daemon (normal mode)
+  python -m gurujee --setup        # run guided setup wizard
   python -m gurujee --headless     # daemon only (Termux:Boot)
-  python -m gurujee --reset        # re-run guided setup
+  python -m gurujee --start        # start daemon headless (alias)
+  python -m gurujee --tui          # start with Textual TUI
+  python -m gurujee --status       # print agent status and exit
+  python -m gurujee --logs         # tail data/gateway.log
+  python -m gurujee --restart      # restart daemon
+  python -m gurujee --reset        # re-run guided setup (alias for --setup)
   python -m gurujee.setup          # guided setup wizard directly
 """
 from __future__ import annotations
@@ -12,6 +18,7 @@ import argparse
 import asyncio
 import logging
 import os
+import subprocess
 import sys
 import time
 from logging.handlers import RotatingFileHandler
@@ -26,8 +33,14 @@ _console = Console()
 
 def main() -> NoReturn:
     parser = argparse.ArgumentParser(prog="gurujee", description="GURUJEE AI companion")
+    parser.add_argument("--setup", action="store_true", help="Run guided setup wizard")
     parser.add_argument("--headless", action="store_true", help="Run daemon without TUI")
-    parser.add_argument("--reset", action="store_true", help="Re-run guided setup")
+    parser.add_argument("--start", action="store_true", help="Start daemon headless (alias for --headless)")
+    parser.add_argument("--tui", action="store_true", help="Start with Textual TUI")
+    parser.add_argument("--status", action="store_true", help="Print agent status and exit")
+    parser.add_argument("--logs", action="store_true", help="Tail data/gateway.log")
+    parser.add_argument("--restart", action="store_true", help="Restart daemon")
+    parser.add_argument("--reset", action="store_true", help="Re-run guided setup (alias for --setup)")
     args = parser.parse_args()
 
     _setup_logging()
@@ -36,22 +49,43 @@ def main() -> NoReturn:
     setup_state_path = data_dir / "setup_state.yaml"
     keystore_path = data_dir / "gurujee.keystore"
 
-    # Detect first run: no setup_state.yaml or completed_at is null
-    is_first_run = _is_first_run(setup_state_path)
+    # --status: print agent status and exit
+    if args.status:
+        _print_status(data_dir)
+        sys.exit(0)
 
-    if is_first_run or args.reset:
+    # --logs: tail gateway.log
+    if args.logs:
+        _tail_logs(data_dir)
+        sys.exit(0)
+
+    # --setup / --reset: run guided setup wizard
+    is_first_run = _is_first_run(setup_state_path)
+    if is_first_run or args.setup or args.reset:
         from gurujee.setup.wizard import SetupWizard
         SetupWizard(data_dir=data_dir).run()
         sys.exit(0)
 
-    # Prompt for PIN before starting
+    # Prompt for PIN before starting daemon
     keystore = _prompt_pin(keystore_path, data_dir)
 
-    if args.headless:
+    # --restart: kill existing daemon process then fall through to start
+    if args.restart:
+        _restart_daemon(data_dir)
+        sys.exit(0)
+
+    headless_mode = args.headless or args.start
+    tui_mode = args.tui
+
+    if headless_mode:
         os.environ["GURUJEE_HEADLESS"] = "1"
         from gurujee.daemon.gateway_daemon import GatewayDaemon
         asyncio.run(GatewayDaemon(keystore=keystore).start())
+    elif tui_mode:
+        from gurujee.tui.app import GurujeeApp
+        GurujeeApp(keystore=keystore).run()
     else:
+        # Default: TUI + daemon
         from gurujee.tui.app import GurujeeApp
         GurujeeApp(keystore=keystore).run()
 
@@ -61,6 +95,61 @@ def main() -> NoReturn:
 # ------------------------------------------------------------------ #
 # Helpers                                                               #
 # ------------------------------------------------------------------ #
+
+def _print_status(data_dir: Path) -> None:
+    """Print a brief status summary of the GURUJEE agent."""
+    setup_state_path = data_dir / "setup_state.yaml"
+    boot_log = data_dir / "boot.log"
+
+    if _is_first_run(setup_state_path):
+        _console.print("[yellow]Status: setup not completed[/yellow]")
+        return
+
+    _console.print("[bold]GURUJEE Status[/bold]")
+    _console.print(f"  Setup state : {setup_state_path}")
+    if boot_log.exists():
+        try:
+            last_lines = boot_log.read_text(encoding="utf-8").strip().splitlines()[-5:]
+            _console.print("  Last log entries:")
+            for line in last_lines:
+                _console.print(f"    {line}")
+        except OSError:
+            _console.print("  [yellow]Could not read boot log.[/yellow]")
+    else:
+        _console.print("  [yellow]No boot log found — daemon may not have started yet.[/yellow]")
+
+
+def _tail_logs(data_dir: Path) -> None:
+    """Tail data/gateway.log (falls back to boot.log if gateway.log absent)."""
+    gateway_log = data_dir / "gateway.log"
+    boot_log = data_dir / "boot.log"
+    log_path = gateway_log if gateway_log.exists() else boot_log
+    if not log_path.exists():
+        _console.print(f"[yellow]No log file found at {log_path}[/yellow]")
+        return
+    try:
+        subprocess.run(["tail", "-f", str(log_path)])
+    except KeyboardInterrupt:
+        pass
+
+
+def _restart_daemon(data_dir: Path) -> None:
+    """Best-effort restart: kill any running gurujee --headless process and advise re-run."""
+    _console.print("[bold]Restarting GURUJEE daemon...[/bold]")
+    try:
+        result = subprocess.run(
+            ["pkill", "-f", "python -m gurujee"],
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            _console.print("[green]Existing daemon process terminated.[/green]")
+        else:
+            _console.print("[yellow]No running daemon found (or pkill unavailable).[/yellow]")
+    except FileNotFoundError:
+        _console.print("[yellow]pkill not available on this platform.[/yellow]")
+
+    _console.print("To start the daemon again, run: python -m gurujee --headless")
+
 
 def _is_first_run(setup_state_path: Path) -> bool:
     if not setup_state_path.exists():
