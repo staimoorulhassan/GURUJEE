@@ -27,6 +27,10 @@ echo "Install directory: $GURUJEE_DIR"
 pkg update -y && pkg upgrade -y
 pkg install -y python git
 
+# Install Rust toolchain for Python packages requiring compilation
+pkg install -y rust binutils clang make
+echo "Rust installed: $(cargo --version)"
+
 # Clone or update repo
 if [ -d "$GURUJEE_DIR/.git" ]; then
     # Verify the directory is actually the GURUJEE repo before pulling.
@@ -49,9 +53,17 @@ fi
 # Install Python dependencies
 pip install -r "$GURUJEE_DIR/requirements.txt"
 
+# Install GURUJEE package in development mode
+echo "Installing GURUJEE package..."
+pip install -e "$GURUJEE_DIR"
+if [ $? -ne 0 ]; then
+    echo "Failed to install GURUJEE package. Please check the error above."
+    exit 1
+fi
+
 # Create data directory if missing
 mkdir -p "$GURUJEE_DIR/data"
 
 echo "=== Starting setup wizard ==="
 cd "$GURUJEE_DIR"
-python -m gurujee.setup
+python -c "from gurujee.setup.wizard import SetupWizard; SetupWizard().run()"
