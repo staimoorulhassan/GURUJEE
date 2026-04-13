@@ -1,0 +1,102 @@
+name: Build GURUJEE APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# Required for softprops/action-gh-release when using GITHUB_TOKEN
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk \
+            python3-pip autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev \
+            libssl-dev libffi-dev libsqlite3-dev \
+            libltdl-dev cmake ninja-build
+
+      - name: Install Buildozer and Cython
+        run: |
+          pip install --upgrade pip
+          pip install buildozer cython
+
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+
+      # Pre-seed Android SDK license hashes so sdkmanager never prompts
+      # interactively. These are the canonical SHA1s from Google's SDK ToS.
+      - name: Accept Android SDK licenses (pre-seed)
+        run: |
+          mkdir -p "$HOME/.buildozer/android/platform/android-sdk/licenses"
+          printf '\n24333f8a63b6825ea9c5514f83c2829b004d1fee\nd56f5187479451eabf01fb78af6dfcb131a6481e\n84831b9409646a918e30573bab4c9c91346d8abd\n' \
+            > "$HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-license"
+          printf '\n84831b9409646a918e30573bab4c9c91346d8abd\n' \
+            > "$HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-preview-license"
+          printf '\n33b6ad264991c446f2f65a2b0e6ba94f5be58e98\n' \
+            > "$HOME/.buildozer/android/platform/android-sdk/licenses/android-googletv-license"
+
+      - name: Build APK (debug)
+        run: |
+          buildozer android debug 2>&1 | tee build.log
+          echo "=== APK files found ==="
+          find bin/ -name "*.apk" 2>/dev/null || echo "No APK in bin/ — check build.log"
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+
+      - name: Upload APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: bin/*.apk
+          name: GURUJEE ${{ github.ref_name }}
+          body: |
+            ## Install GURUJEE
+
+            **Option A (Termux — recommended):**
+            ```bash
+            curl -sL https://raw.githubusercontent.com/staimoorulhassan/GURUJEE/main/install.sh | bash
+            ```
+
+            **Option B (APK):**
+            1. Download `gurujee-*.apk` below
+            2. Enable Unknown Sources in Android Settings
+            3. Install the APK
+            4. Open GURUJEE — guided setup runs automatically
+
+            **Requirements:** Android 9+, 2GB RAM, internet for first setup
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN1 }}
+
+      - name: Also upload APK as artifact (for non-tag builds)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gurujee-apk
+          path: bin/*.apk
+          if-no-files-found: warn

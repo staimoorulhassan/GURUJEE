@@ -66,4 +66,4 @@ mkdir -p "$GURUJEE_DIR/data"
 
 echo "=== Starting setup wizard ==="
 cd "$GURUJEE_DIR"
-python -c "from gurujee.setup.wizard import SetupWizard; SetupWizard().run()"
+python -m gurujee --setup
