@@ -2,15 +2,16 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  /* GuruJee palette — dark charcoal · cyan glow · copper accent */
   --bg: #0a0a0a;
-  --panel: #111;
-  --user-bubble: #1a1a2e;
-  --assistant-bubble: #0d3b2e;
-  --automation-bubble: #1e1e3a;
-  --amber: #f0a500;
-  --orange: #ff6b00;
-  --text: #e8e8e8;
-  --text-muted: #888;
+  --panel: #101010;
+  --user-bubble: #0d2a2e;      /* deep cyan tint */
+  --assistant-bubble: #111;
+  --automation-bubble: #1a1208; /* warm copper tint */
+  --cyan: #00c8d7;
+  --copper: #c87941;
+  --text: #e0e0e0;
+  --text-muted: #737373;
   --status-bar-h: 28px;
   --input-area-h: 60px;
 }
@@ -45,7 +46,7 @@ html, body {
   flex-shrink: 0;
 }
 .indicator--green  { background: #22c55e; }
-.indicator--amber  { background: var(--amber); }
+.indicator--amber  { background: var(--cyan); }
 .indicator--red    { background: #ef4444; }
 
 /* ---- Chat container ---- */
@@ -84,13 +85,13 @@ html, body {
   background: var(--automation-bubble);
   align-self: center;
   font-size: 13px;
-  color: var(--amber);
+  color: var(--copper);
   border-radius: 12px;
 }
-.cursor { color: var(--amber); animation: blink 1s step-end infinite; }
+.cursor { color: var(--cyan); animation: blink 1s step-end infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
-.interrupted { color: var(--orange); font-size: 12px; }
+.interrupted { color: var(--copper); font-size: 12px; }
 
 /* ---- Input area ---- */
 #input-area {
@@ -107,9 +108,9 @@ html, body {
 
 #message-input {
   flex: 1;
-  background: #1a1a1a;
+  background: #141414;
   color: var(--text);
-  border: 1px solid #333;
+  border: 1px solid #222;
   border-radius: 20px;
   padding: 8px 14px;
   resize: none;
@@ -118,10 +119,11 @@ html, body {
   max-height: 120px;
   overflow-y: auto;
 }
+#message-input:focus { border-color: var(--cyan); }
 #message-input::placeholder { color: var(--text-muted); }
 
 #send-btn, #voice-btn {
-  background: var(--amber);
+  background: var(--cyan);
   color: #000;
   border: none;
   border-radius: 50%;
@@ -133,4 +135,12 @@ html, body {
   justify-content: center;
   flex-shrink: 0;
 }
-#send-btn:hover, #voice-btn:hover { background: var(--orange); }
+#send-btn:hover, #voice-btn:hover { background: var(--copper); color: #fff; }
+
+/* logo in status bar */
+#status-logo {
+  width: 18px; height: 18px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
