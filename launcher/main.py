@@ -29,6 +29,7 @@ from launcher.bootstrap import (
     inject_bootstrap,
     install_termux,
     install_termux_api,
+    open_termux,
     poll_daemon_ready,
 )
 
@@ -327,46 +328,68 @@ class GurujeeApp(App):
             ps.set_status("Checking Termux…", 5)
             if not check_termux_installed():
                 ps.set_status("Installing Termux…", 10)
-                ps.set_detail("This may take a moment")
-                ok = install_termux()
-                if not ok:
-                    ok = _try_intent_install("/sdcard/DCIM/termux.apk", ps)
-                if not ok:
-                    ps.set_status("[color=c87941]Termux install failed[/color]", 10)
+                ps.set_detail("Tap 'Install' in the system prompt")
+                install_termux()
+                # Wait up to 60 s for user to confirm install
+                deadline = __import__("time").time() + 60
+                while __import__("time").time() < deadline:
+                    if check_termux_installed():
+                        break
+                    __import__("time").sleep(2)
+                if not check_termux_installed():
+                    ps.set_status("[color=c87941]Termux not found[/color]", 10)
                     ps.set_detail(
-                        "Tap Retry to try again, or Skip to continue\n"
-                        "You can install Termux manually from F-Droid"
+                        "Install Termux from F-Droid, then tap Retry.\n"
+                        "Already installed? Tap Skip."
                     )
                     ps.show_retry_skip(
-                        hint="F-Droid: search 'Termux' — install, then tap Retry"
+                        hint="F-Droid → search 'Termux' → Install"
                     )
                     return
             ps.set_status("Termux ready", 20)
         else:
-            ps.set_status("Skipped Termux install", 20)
-            ps.set_detail("Assuming Termux is already installed")
+            ps.set_status("Termux check skipped", 20)
+            ps.set_detail("")
 
         # Step 2 — Termux:API (non-fatal)
         ps.set_status("Checking Termux:API…", 25)
         if not check_termux_api_installed():
-            ps.set_status("Installing Termux:API…", 30)
             install_termux_api()
         ps.set_status("Termux:API ready", 40)
 
-        # Step 3 — Inject bootstrap script
-        ps.set_status("Starting GURUJEE…", 50)
-        ps.set_detail("Injecting bootstrap script into Termux")
-        inject_bootstrap(_BOOTSTRAP_SCRIPT)
-        ps.set_status("Bootstrap injected", 60)
+        # Step 3 — Inject bootstrap script (best-effort)
+        ps.set_status("Starting GURUJEE daemon…", 50)
+        injected = inject_bootstrap(_BOOTSTRAP_SCRIPT)
+        if not injected:
+            # RUN_COMMAND requires allow-external-apps — open Termux as fallback
+            open_termux()
+            ps.set_detail(
+                "In Termux, run:  bash gurujee/gurujee_bootstrap.sh\n"
+                "Then come back here."
+            )
+        else:
+            ps.set_detail("Bootstrap running…")
+        ps.set_status("Waiting for daemon…", 60)
 
-        # Step 4 — Poll daemon
-        ps.set_status("Connecting…", 65)
-        ps.set_detail("Waiting for GURUJEE daemon (up to 3 min)")
-        ready = poll_daemon_ready(timeout_seconds=180)
+        # Step 4 — Poll daemon with live countdown
+        _POLL_TIMEOUT = 180
+
+        def _tick(elapsed: int, remaining: int) -> None:
+            pct = 60 + int(40 * elapsed / _POLL_TIMEOUT)
+            ps.set_status(f"Connecting… ({remaining}s)", min(pct, 99))
+            if not injected:
+                ps.set_detail(
+                    "Run  bash gurujee/gurujee_bootstrap.sh  in Termux"
+                )
+
+        ready = poll_daemon_ready(timeout_seconds=_POLL_TIMEOUT, tick_cb=_tick)
 
         if not ready:
-            ps.set_status("[color=c87941]Connection timed out[/color]", 65)
-            ps.set_detail("GURUJEE did not start in time")
+            ps.set_status("[color=c87941]Daemon not responding[/color]", 65)
+            ps.set_detail(
+                "GURUJEE did not start in time.\n"
+                "Open Termux and run the bootstrap script manually."
+            )
             ps.show_retry_skip(hint="Tap Skip to open the UI anyway")
             return
 
@@ -374,57 +397,6 @@ class GurujeeApp(App):
         ps.set_detail("Opening GURUJEE…")
         Clock.schedule_once(self._switch_to_webview, 0.5)
 
-
-def _try_intent_install(apk_path: str, ps: "ProgressScreen") -> bool:
-    """Fallback: use Android ACTION_INSTALL_PACKAGE intent via jnius."""
-    try:
-        from jnius import autoclass  # type: ignore[import-untyped]
-        from pathlib import Path
-
-        if not Path(apk_path).exists():
-            return False
-
-        PythonActivity = autoclass("org.kivy.android.PythonActivity")
-        Intent = autoclass("android.content.Intent")
-        Uri = autoclass("android.net.Uri")
-        Build = autoclass("android.os.Build")
-
-        activity = PythonActivity.mActivity
-        intent = Intent(Intent.ACTION_INSTALL_PACKAGE)
-
-        # Android 7+ requires FileProvider URI
-        if Build.VERSION.SDK_INT >= 24:
-            FileProvider = autoclass("androidx.core.content.FileProvider")
-            File = autoclass("java.io.File")
-            uri = FileProvider.getUriForFile(
-                activity,
-                f"{activity.getPackageName()}.fileprovider",
-                File(apk_path),
-            )
-        else:
-            uri = Uri.fromFile(autoclass("java.io.File")(apk_path))
-
-        intent.setData(uri)
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        intent.putExtra("android.intent.extra.NOT_UNKNOWN_SOURCE", True)
-
-        ps.set_detail("Waiting for manual install confirmation…")
-
-        def _start(_dt: float) -> None:
-            activity.startActivityForResult(intent, 1001)
-
-        Clock.schedule_once(_start, 0)
-        # Wait up to 60 s for the user to confirm install
-        import time
-        deadline = time.time() + 60
-        while time.time() < deadline:
-            from launcher.bootstrap import check_termux_installed
-            if check_termux_installed():
-                return True
-            time.sleep(2)
-        return False
-    except Exception:
-        return False
 
 
 # ---------------------------------------------------------------------------
