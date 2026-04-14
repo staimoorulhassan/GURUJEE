@@ -58,7 +58,7 @@ android.enable_androidx = True
 [buildozer]
 
 # Log verbosity (0=quiet, 1=normal, 2=verbose)
-log_level = 1
+log_level = 2
 
 # Warn only; do not fail on missing optional assets
 warn_on_root = 1
