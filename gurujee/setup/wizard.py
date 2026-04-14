@@ -312,13 +312,15 @@ class SetupWizard:
 
         if poll_key.strip():
             keystore_path = self._data_dir / "gurujee.keystore"
+            pin = Prompt.ask("Enter your keystore PIN to save the key", password=True, default="")
             try:
-                ks = Keystore(keystore_path)
+                from gurujee.keystore.keystore import KeystoreError
+                ks = Keystore(keystore_path, pin)
                 ks.set("POLLINATIONS_API_KEY", poll_key.strip())
                 _console.print("[green]✓ Pollinations API key saved to keystore.[/green]")
                 if state and "steps" in state:
                     state["steps"]["pollinations_key"]["pollinations_key_set"] = True
-            except Exception as exc:
+            except (OSError, ValueError, KeystoreError) as exc:
                 _console.print(f"[yellow]⚠ Could not save key: {exc}. Add it later in Settings.[/yellow]")
                 if state and "steps" in state:
                     state["steps"]["pollinations_key"]["skipped"] = True
@@ -447,6 +449,8 @@ class SetupWizard:
         script_content = (
             "#!/data/data/com.termux/files/usr/bin/bash\n"
             "sleep 5\n"
+            "# shellcheck source=/dev/null\n"
+            "source \"$HOME/.gurujee.env\" 2>/dev/null || true\n"
             f"cd '{install_dir}'\n"
             "python -m gurujee --headless >> data/boot.log 2>&1 &\n"
         )

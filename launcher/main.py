@@ -1,17 +1,24 @@
-"""GURUJEE Launcher APK — Kivy entry point (T059).
+"""GURUJEE Launcher APK — Kivy entry point (T059 redesign).
 
 Screens:
-  ProgressScreen — shown while bootstrap runs (installs Termux, starts daemon).
-  WebViewScreen  — loads http://localhost:7171 in a native Android WebView.
+  WelcomeScreen    — branding + "Install Termux from F-Droid" / "I have Termux → Next"
+  SetupScreen      — copyable curl command + "Open Termux" button
+  ConnectingScreen — polls /health with live countdown
+  WebViewScreen    — loads http://localhost:7171 in a native Android WebView
 
-Run flow:
-  GurujeeApp.on_start() → bootstrap thread → poll_daemon_ready() → switch screen.
+Run flow (first time):
+  on_start() quick-probe → not ready → WelcomeScreen
+  WelcomeScreen → SetupScreen → ConnectingScreen → WebViewScreen
+
+Run flow (subsequent opens):
+  on_start() quick-probe → ready → WebViewScreen immediately
 
 Theme: dark #0a0a0a bg · cyan #00c8d7 primary · copper #c87941 secondary.
 """
 from __future__ import annotations
 
 import threading
+import urllib.request
 
 from kivy.app import App
 from kivy.clock import Clock
@@ -24,32 +31,53 @@ from kivy.uix.screenmanager import Screen, ScreenManager
 from kivy.uix.widget import Widget
 
 from launcher.bootstrap import (
-    check_termux_api_installed,
     check_termux_installed,
-    inject_bootstrap,
-    install_termux,
-    install_termux_api,
+    copy_to_clipboard,
     open_termux,
+    open_url,
     poll_daemon_ready,
 )
 
-# Bootstrap script that install.sh creates inside Termux home.
-_BOOTSTRAP_SCRIPT = "/data/data/com.termux/files/home/gurujee/gurujee_bootstrap.sh"
 _WEBVIEW_URL = "http://localhost:7171"
+_HEALTH_URL = "http://127.0.0.1:7171/health"
+_FDROID_TERMUX_URL = "https://f-droid.org/en/packages/com.termux/"
+_INSTALL_COMMAND = (
+    "curl -fsSL "
+    "https://raw.githubusercontent.com/staimoorulhassan/GURUJEE/main/install.sh"
+    " | bash"
+)
 
 # ── Palette ────────────────────────────────────────────────────────────────
 _BG        = (0.039, 0.039, 0.039, 1)   # #0a0a0a
-_CYAN      = (0,     0.784, 0.843, 1)   # #00c8d7  — logo eye glow
-_COPPER    = (0.784, 0.475, 0.255, 1)   # #c87941  — logo chest feathers
+_PANEL     = (0.063, 0.063, 0.063, 1)   # #101010
+_CYAN      = (0,     0.784, 0.843, 1)   # #00c8d7
+_COPPER    = (0.784, 0.475, 0.255, 1)   # #c87941
 _TEXT      = (0.878, 0.878, 0.878, 1)   # #e0e0e0
 _MUTED     = (0.45,  0.45,  0.45,  1)   # #737373
-_BTN_BG    = (0.055, 0.055, 0.055, 1)   # slight lift on #0a0a0a
 
 _KV = """
 #:kivy 2.0
 
-<ProgressScreen>:
-    name: 'progress'
+<WelcomeScreen>:
+    name: 'welcome'
+    canvas.before:
+        Color:
+            rgba: 0.039, 0.039, 0.039, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+<SetupScreen>:
+    name: 'setup'
+    canvas.before:
+        Color:
+            rgba: 0.039, 0.039, 0.039, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+<ConnectingScreen>:
+    name: 'connecting'
     canvas.before:
         Color:
             rgba: 0.039, 0.039, 0.039, 1
@@ -69,116 +97,356 @@ _KV = """
 
 
 # ---------------------------------------------------------------------------
-# Screens
+# Helpers
 # ---------------------------------------------------------------------------
 
-class ProgressScreen(Screen):
-    """Boot screen — logo, progress bar, and status messages."""
+def _make_btn(
+    text: str,
+    bg: tuple,
+    fg: tuple = (0, 0, 0, 1),
+    size_hint_x: float = 1,
+    font_size: str = "15sp",
+) -> Button:
+    return Button(
+        text=text,
+        font_size=font_size,
+        size_hint=(size_hint_x, None),
+        height="48dp",
+        background_color=bg,
+        color=fg,
+    )
+
+
+# ---------------------------------------------------------------------------
+# WelcomeScreen
+# ---------------------------------------------------------------------------
+
+class WelcomeScreen(Screen):
+    """Branding + F-Droid Termux install prompt."""
 
     def __init__(self, **kwargs: object) -> None:
         super().__init__(**kwargs)
 
-        root = BoxLayout(orientation="vertical", padding=32, spacing=12)
+        root = BoxLayout(orientation="vertical", padding=32, spacing=14)
+        root.add_widget(Widget(size_hint=(1, 0.06)))
 
-        # ── top spacer
-        root.add_widget(Widget(size_hint=(1, 0.08)))
-
-        # ── Logo ────────────────────────────────────────────────────────
         logo = Image(
             source="assets/icon.png",
-            size_hint=(1, 0.30),
+            size_hint=(1, 0.28),
             allow_stretch=True,
             keep_ratio=True,
         )
         root.add_widget(logo)
 
-        # ── Title ───────────────────────────────────────────────────────
-        self._title = Label(
+        root.add_widget(Label(
             text="[b]GURU[color=00c8d7]JEE[/color][/b]",
             markup=True,
-            font_size="30sp",
+            font_size="32sp",
             color=_TEXT,
-            size_hint=(1, 0.10),
-        )
-        root.add_widget(self._title)
+            size_hint=(1, None),
+            height="48dp",
+        ))
 
-        # ── Status ──────────────────────────────────────────────────────
-        self._status = Label(
-            text="Starting…",
+        root.add_widget(Label(
+            text="The new era of operating your device with AI.",
             font_size="14sp",
             color=_CYAN,
-            size_hint=(1, 0.07),
+            size_hint=(1, None),
+            height="30dp",
+        ))
+
+        root.add_widget(Widget(size_hint=(1, 0.04)))
+
+        root.add_widget(Label(
+            text=(
+                "To get started, you need [b]Termux[/b] installed from F-Droid.\n"
+                "(Do NOT use the Play Store version.)"
+            ),
+            markup=True,
+            font_size="13sp",
+            color=_TEXT,
+            size_hint=(1, None),
+            height="52dp",
+            halign="center",
+            text_size=(None, None),
+        ))
+
+        root.add_widget(Widget(size_hint=(1, 0.04)))
+
+        fdroid_btn = _make_btn(
+            "Install Termux from F-Droid", _CYAN, (0, 0, 0, 1)
+        )
+        fdroid_btn.bind(on_press=self._on_fdroid)
+        root.add_widget(fdroid_btn)
+
+        root.add_widget(Widget(size_hint=(1, None), height="10dp"))
+
+        have_btn = _make_btn(
+            "I already have Termux  →  Next", _PANEL, _MUTED
+        )
+        have_btn.bind(on_press=self._on_have_termux)
+        root.add_widget(have_btn)
+
+        self._status = Label(
+            text="",
+            font_size="12sp",
+            color=_COPPER,
+            size_hint=(1, None),
+            height="28dp",
+            halign="center",
         )
         root.add_widget(self._status)
 
-        # ── Progress bar ────────────────────────────────────────────────
-        self._bar = ProgressBar(max=100, value=0, size_hint=(1, 0.025))
+        root.add_widget(Widget(size_hint=(1, 1)))
+        self.add_widget(root)
+
+    def _on_fdroid(self, _btn: Button) -> None:
+        open_url(_FDROID_TERMUX_URL)
+
+    def _on_have_termux(self, _btn: Button) -> None:
+        if check_termux_installed():
+            App.get_running_app().go_to("setup")
+        else:
+            def _u(_dt: float) -> None:
+                self._status.text = "Termux not detected — please install it first."
+            Clock.schedule_once(_u, 0)
+
+
+# ---------------------------------------------------------------------------
+# SetupScreen
+# ---------------------------------------------------------------------------
+
+class SetupScreen(Screen):
+    """Single copyable curl command + Open Termux button."""
+
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+
+        root = BoxLayout(orientation="vertical", padding=32, spacing=14)
+        root.add_widget(Widget(size_hint=(1, 0.05)))
+
+        logo = Image(
+            source="assets/icon.png",
+            size_hint=(1, 0.15),
+            allow_stretch=True,
+            keep_ratio=True,
+        )
+        root.add_widget(logo)
+
+        root.add_widget(Label(
+            text="[b]Set up GURUJEE[/b]",
+            markup=True,
+            font_size="24sp",
+            color=_TEXT,
+            size_hint=(1, None),
+            height="40dp",
+        ))
+
+        instructions = (
+            "1.  Open Termux\n"
+            "2.  Paste the command below and press [b]Enter[/b]\n"
+            "3.  Follow the on-screen prompts\n"
+            "4.  Return here when done"
+        )
+        root.add_widget(Label(
+            text=instructions,
+            markup=True,
+            font_size="13sp",
+            color=_TEXT,
+            size_hint=(1, None),
+            height="88dp",
+            halign="left",
+            text_size=(None, None),
+        ))
+
+        # Command box
+        cmd_box = BoxLayout(
+            orientation="vertical",
+            size_hint=(1, None),
+            height="72dp",
+            padding=[12, 8, 12, 8],
+        )
+        with cmd_box.canvas.before:
+            from kivy.graphics import Color, RoundedRectangle
+            Color(0.063, 0.063, 0.063, 1)
+            cmd_box._rect = RoundedRectangle(
+                pos=cmd_box.pos, size=cmd_box.size, radius=[8]
+            )
+        cmd_box.bind(
+            pos=lambda inst, v: setattr(inst._rect, "pos", v),
+            size=lambda inst, v: setattr(inst._rect, "size", v),
+        )
+        self._cmd_label = Label(
+            text=_INSTALL_COMMAND,
+            font_size="10sp",
+            color=_CYAN,
+            halign="left",
+            valign="middle",
+            text_size=(None, None),
+        )
+        cmd_box.add_widget(self._cmd_label)
+        root.add_widget(cmd_box)
+
+        copy_btn = _make_btn("📋  Copy Command", _CYAN, (0, 0, 0, 1))
+        copy_btn.bind(on_press=self._on_copy)
+        root.add_widget(copy_btn)
+
+        open_btn = _make_btn("▶  Open Termux", _PANEL, _TEXT)
+        open_btn.bind(on_press=self._on_open_termux)
+        root.add_widget(open_btn)
+
+        check_btn = _make_btn(
+            "✓  I've run it — Check Connection", _COPPER, (1, 1, 1, 1)
+        )
+        check_btn.bind(on_press=self._on_check)
+        root.add_widget(check_btn)
+
+        self._feedback = Label(
+            text="",
+            font_size="12sp",
+            color=_CYAN,
+            size_hint=(1, None),
+            height="28dp",
+        )
+        root.add_widget(self._feedback)
+
+        root.add_widget(Widget(size_hint=(1, 1)))
+        self.add_widget(root)
+
+    def _on_copy(self, _btn: Button) -> None:
+        copy_to_clipboard(_INSTALL_COMMAND)
+
+        def _u(_dt: float) -> None:
+            self._feedback.text = "Copied to clipboard!"
+        Clock.schedule_once(_u, 0)
+        Clock.schedule_once(lambda _dt: setattr(self._feedback, "text", ""), 2)
+
+    def _on_open_termux(self, _btn: Button) -> None:
+        open_termux()
+
+    def _on_check(self, _btn: Button) -> None:
+        App.get_running_app().go_to("connecting")
+
+
+# ---------------------------------------------------------------------------
+# ConnectingScreen
+# ---------------------------------------------------------------------------
+
+class ConnectingScreen(Screen):
+    """Polls /health with live countdown; switches to WebView on success."""
+
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+
+        root = BoxLayout(orientation="vertical", padding=32, spacing=14)
+        root.add_widget(Widget(size_hint=(1, 0.08)))
+
+        logo = Image(
+            source="assets/icon.png",
+            size_hint=(1, 0.18),
+            allow_stretch=True,
+            keep_ratio=True,
+        )
+        root.add_widget(logo)
+
+        root.add_widget(Label(
+            text="[b]Connecting to GURUJEE…[/b]",
+            markup=True,
+            font_size="22sp",
+            color=_TEXT,
+            size_hint=(1, None),
+            height="38dp",
+        ))
+
+        self._status = Label(
+            text="Checking…",
+            font_size="14sp",
+            color=_CYAN,
+            size_hint=(1, None),
+            height="30dp",
+        )
+        root.add_widget(self._status)
+
+        self._bar = ProgressBar(max=100, value=0, size_hint=(1, None), height="8dp")
         root.add_widget(self._bar)
 
-        # ── Detail / sub-status ─────────────────────────────────────────
         self._detail = Label(
             text="",
-            font_size="11sp",
+            font_size="12sp",
             color=_MUTED,
-            size_hint=(1, 0.07),
-        )
-        root.add_widget(self._detail)
-
-        # ── Action buttons (hidden until needed) ────────────────────────
-        btn_row = BoxLayout(
-            orientation="horizontal",
-            size_hint=(1, 0.09),
-            spacing=16,
-            padding=[0, 4, 0, 4],
-        )
-
-        self._retry_btn = Button(
-            text="Retry",
-            font_size="14sp",
-            size_hint=(0.45, 1),
-            pos_hint={"center_y": 0.5},
-            opacity=0,
-            disabled=True,
-            background_color=_CYAN,
-            color=(0, 0, 0, 1),
-        )
-        self._retry_btn.bind(on_press=self._on_retry)
-
-        self._skip_btn = Button(
-            text="Skip",
-            font_size="14sp",
-            size_hint=(0.45, 1),
-            pos_hint={"center_y": 0.5},
-            opacity=0,
-            disabled=True,
-            background_color=_COPPER,
-            color=(1, 1, 1, 1),
-        )
-        self._skip_btn.bind(on_press=self._on_skip)
-
-        btn_row.add_widget(Widget(size_hint=(0.05, 1)))
-        btn_row.add_widget(self._retry_btn)
-        btn_row.add_widget(self._skip_btn)
-        btn_row.add_widget(Widget(size_hint=(0.05, 1)))
-        root.add_widget(btn_row)
-
-        # ── Manual-install hint (hidden until needed) ────────────────────
-        self._manual_hint = Label(
-            text="",
-            font_size="10sp",
-            color=_MUTED,
-            size_hint=(1, 0.06),
+            size_hint=(1, None),
+            height="28dp",
             halign="center",
             text_size=(None, None),
         )
-        root.add_widget(self._manual_hint)
+        root.add_widget(self._detail)
 
-        root.add_widget(Widget(size_hint=(1, 0.06)))  # bottom filler
+        # Retry row (hidden initially)
+        btn_row = BoxLayout(
+            orientation="horizontal",
+            size_hint=(1, None),
+            height="52dp",
+            spacing=12,
+        )
+        self._open_termux_btn = _make_btn(
+            "Open Termux", _PANEL, _TEXT, size_hint_x=0.33
+        )
+        self._open_termux_btn.bind(on_press=lambda _b: open_termux())
+        self._retry_btn = _make_btn(
+            "Try Again", _CYAN, (0, 0, 0, 1), size_hint_x=0.34
+        )
+        self._retry_btn.bind(on_press=self._on_retry)
+        self._setup_btn = _make_btn(
+            "Back to Setup", _COPPER, (1, 1, 1, 1), size_hint_x=0.33
+        )
+        self._setup_btn.bind(on_press=lambda _b: App.get_running_app().go_to("setup"))
+
+        for btn in (self._open_termux_btn, self._retry_btn, self._setup_btn):
+            btn.opacity = 0
+            btn.disabled = True
+            btn_row.add_widget(btn)
+        root.add_widget(btn_row)
+
+        root.add_widget(Widget(size_hint=(1, 1)))
         self.add_widget(root)
+        self._polling = False
 
-    # ------------------------------------------------------------------
-    # Public helpers (called from background thread via Clock.schedule_once)
-    # ------------------------------------------------------------------
+    def on_enter(self) -> None:
+        self._hide_retry_row()
+        self._start_poll()
+
+    def _start_poll(self) -> None:
+        if self._polling:
+            return
+        self._polling = True
+        self.set_status("Checking…", 0)
+        self.set_detail("")
+        t = threading.Thread(target=self._poll_thread, daemon=True)
+        t.start()
+
+    def _poll_thread(self) -> None:
+        _TIMEOUT = 60
+
+        def _tick(elapsed: int, remaining: int) -> None:
+            pct = int(100 * elapsed / _TIMEOUT)
+            self.set_status(f"Connecting… ({remaining}s)", min(pct, 95))
+
+        ready = poll_daemon_ready(timeout_seconds=_TIMEOUT, tick_cb=_tick)
+        self._polling = False
+
+        if ready:
+            self.set_status("[color=00c8d7]Connected![/color]", 100)
+            self.set_detail("Opening GURUJEE…")
+            Clock.schedule_once(
+                lambda _dt: App.get_running_app().go_to("webview"), 0.5
+            )
+        else:
+            self.set_status("[color=c87941]Not responding[/color]", 0)
+            self.set_detail(
+                "GURUJEE is not running in Termux.\n"
+                "Open Termux and check the daemon is running."
+            )
+            self._show_retry_row()
 
     def set_status(self, text: str, progress: float = -1) -> None:
         def _u(_dt: float) -> None:
@@ -188,50 +456,30 @@ class ProgressScreen(Screen):
         Clock.schedule_once(_u, 0)
 
     def set_detail(self, text: str) -> None:
+        Clock.schedule_once(lambda _dt: setattr(self._detail, "text", text), 0)
+
+    def _show_retry_row(self) -> None:
         def _u(_dt: float) -> None:
-            self._detail.text = text
+            for btn in (self._open_termux_btn, self._retry_btn, self._setup_btn):
+                btn.opacity = 1
+                btn.disabled = False
         Clock.schedule_once(_u, 0)
 
-    def show_retry_skip(self, hint: str = "") -> None:
+    def _hide_retry_row(self) -> None:
         def _u(_dt: float) -> None:
-            self._retry_btn.opacity = 1
-            self._retry_btn.disabled = False
-            self._skip_btn.opacity = 1
-            self._skip_btn.disabled = False
-            self._manual_hint.text = hint
+            for btn in (self._open_termux_btn, self._retry_btn, self._setup_btn):
+                btn.opacity = 0
+                btn.disabled = True
         Clock.schedule_once(_u, 0)
-
-    def hide_retry_skip(self) -> None:
-        def _u(_dt: float) -> None:
-            self._retry_btn.opacity = 0
-            self._retry_btn.disabled = True
-            self._skip_btn.opacity = 0
-            self._skip_btn.disabled = True
-            self._manual_hint.text = ""
-        Clock.schedule_once(_u, 0)
-
-    # keep backward-compat with old show_retry callers
-    def show_retry(self) -> None:
-        self.show_retry_skip()
-
-    def hide_retry(self) -> None:
-        self.hide_retry_skip()
-
-    # ------------------------------------------------------------------
 
     def _on_retry(self, _btn: Button) -> None:
-        app = App.get_running_app()
-        if app:
-            self.hide_retry_skip()
-            app.start_bootstrap()
+        self._hide_retry_row()
+        self._start_poll()
 
-    def _on_skip(self, _btn: Button) -> None:
-        """Skip Termux install — proceed directly to daemon polling."""
-        app = App.get_running_app()
-        if app:
-            self.hide_retry_skip()
-            app.start_bootstrap(skip_termux=True)
 
+# ---------------------------------------------------------------------------
+# WebViewScreen
+# ---------------------------------------------------------------------------
 
 class WebViewScreen(Screen):
     """Full-screen Android WebView loading the PWA at localhost:7171."""
@@ -296,107 +544,33 @@ class GurujeeApp(App):
         Builder.load_string(_KV)
 
         self._sm = ScreenManager()
-        self._progress = ProgressScreen()
-        self._webview = WebViewScreen()
-        self._sm.add_widget(self._progress)
-        self._sm.add_widget(self._webview)
+        self._sm.add_widget(WelcomeScreen())
+        self._sm.add_widget(SetupScreen())
+        self._sm.add_widget(ConnectingScreen())
+        self._sm.add_widget(WebViewScreen())
         return self._sm
 
     def on_start(self) -> None:
-        self.start_bootstrap()
-
-    def start_bootstrap(self, skip_termux: bool = False) -> None:
-        t = threading.Thread(
-            target=self._bootstrap,
-            kwargs={"skip_termux": skip_termux},
-            daemon=True,
-        )
+        # Fast probe: if daemon already running, skip all onboarding
+        t = threading.Thread(target=self._quick_probe, daemon=True)
         t.start()
 
-    def _switch_to_webview(self, _dt: float = 0) -> None:
-        self._sm.current = "webview"
-
-    # ------------------------------------------------------------------
-    # Bootstrap sequence
-    # ------------------------------------------------------------------
-
-    def _bootstrap(self, skip_termux: bool = False) -> None:
-        ps = self._progress
-
-        # Step 1 — Termux (skippable)
-        if not skip_termux:
-            ps.set_status("Checking Termux…", 5)
-            if not check_termux_installed():
-                ps.set_status("Installing Termux…", 10)
-                ps.set_detail("Tap 'Install' in the system prompt")
-                install_termux()
-                # Wait up to 60 s for user to confirm install
-                deadline = __import__("time").time() + 60
-                while __import__("time").time() < deadline:
-                    if check_termux_installed():
-                        break
-                    __import__("time").sleep(2)
-                if not check_termux_installed():
-                    ps.set_status("[color=c87941]Termux not found[/color]", 10)
-                    ps.set_detail(
-                        "Install Termux from F-Droid, then tap Retry.\n"
-                        "Already installed? Tap Skip."
-                    )
-                    ps.show_retry_skip(
-                        hint="F-Droid → search 'Termux' → Install"
-                    )
+    def _quick_probe(self) -> None:
+        """3-second probe — go straight to WebView if daemon already up."""
+        try:
+            with urllib.request.urlopen(_HEALTH_URL, timeout=3) as resp:
+                import json
+                data = json.loads(resp.read())
+                if data.get("status") == "ready":
+                    Clock.schedule_once(lambda _dt: self.go_to("webview"), 0)
                     return
-            ps.set_status("Termux ready", 20)
-        else:
-            ps.set_status("Termux check skipped", 20)
-            ps.set_detail("")
+        except Exception:
+            pass
+        # Not ready — start at WelcomeScreen (already the default)
+        Clock.schedule_once(lambda _dt: self.go_to("welcome"), 0)
 
-        # Step 2 — Termux:API (non-fatal)
-        ps.set_status("Checking Termux:API…", 25)
-        if not check_termux_api_installed():
-            install_termux_api()
-        ps.set_status("Termux:API ready", 40)
-
-        # Step 3 — Inject bootstrap script (best-effort)
-        ps.set_status("Starting GURUJEE daemon…", 50)
-        injected = inject_bootstrap(_BOOTSTRAP_SCRIPT)
-        if not injected:
-            # RUN_COMMAND requires allow-external-apps — open Termux as fallback
-            open_termux()
-            ps.set_detail(
-                "In Termux, run:  bash gurujee/gurujee_bootstrap.sh\n"
-                "Then come back here."
-            )
-        else:
-            ps.set_detail("Bootstrap running…")
-        ps.set_status("Waiting for daemon…", 60)
-
-        # Step 4 — Poll daemon with live countdown
-        _POLL_TIMEOUT = 180
-
-        def _tick(elapsed: int, remaining: int) -> None:
-            pct = 60 + int(40 * elapsed / _POLL_TIMEOUT)
-            ps.set_status(f"Connecting… ({remaining}s)", min(pct, 99))
-            if not injected:
-                ps.set_detail(
-                    "Run  bash gurujee/gurujee_bootstrap.sh  in Termux"
-                )
-
-        ready = poll_daemon_ready(timeout_seconds=_POLL_TIMEOUT, tick_cb=_tick)
-
-        if not ready:
-            ps.set_status("[color=c87941]Daemon not responding[/color]", 65)
-            ps.set_detail(
-                "GURUJEE did not start in time.\n"
-                "Open Termux and run the bootstrap script manually."
-            )
-            ps.show_retry_skip(hint="Tap Skip to open the UI anyway")
-            return
-
-        ps.set_status("[color=00c8d7]Connected![/color]", 100)
-        ps.set_detail("Opening GURUJEE…")
-        Clock.schedule_once(self._switch_to_webview, 0.5)
-
+    def go_to(self, screen: str) -> None:
+        self._sm.current = screen
 
 
 # ---------------------------------------------------------------------------
