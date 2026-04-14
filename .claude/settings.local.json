@@ -1,4 +1,8 @@
 {
+  "env": {
+    "PYTHONHOME": "C:/Users/Taimoor/AppData/Local/Programs/Python/Python311",
+    "PYTHONPATH": "C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/Lib;C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/Lib/site-packages"
+  },
   "permissions": {
     "allow": [
       "WebFetch(domain:agentfactory.panaversity.org)",
@@ -48,7 +52,29 @@
       "Bash(powershell.exe -File .specify/scripts/powershell/check-prerequisites.ps1 -Json -RequireTasks -IncludeTasks)",
       "Bash(gh pr create --base main --head 001-gurujee-foundation --title 'feat\\(foundation\\): complete GURUJEE Foundation — split-layer daemon + PWA + automation + launcher' --body ':*)",
       "Bash(powershell.exe -NonInteractive -File \".specify/scripts/powershell/check-prerequisites.ps1\" -Json -RequireTasks -IncludeTasks)",
-      "Bash(powershell -Command \".\\\\.specify\\\\scripts\\\\powershell\\\\check-prerequisites.ps1 -Json -RequireTasks -IncludeTasks\")"
+      "Bash(powershell -Command \".\\\\.specify\\\\scripts\\\\powershell\\\\check-prerequisites.ps1 -Json -RequireTasks -IncludeTasks\")",
+      "Bash(echo \"\")",
+      "Bash(echo \"# Claude Code worktrees\")",
+      "Bash(echo \".claude/worktrees/\")",
+      "Bash(powershell.exe:*)",
+      "Bash(where python:*)",
+      "Bash(/c/Python314/python -m pytest tests/ -x -q --tb=short)",
+      "Bash(where python.exe)",
+      "Bash(powershell -Command \"& {python --version}\")",
+      "Read(//c/Python314/Lib/**)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pytest tests/ -x -q --tb=short)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pip install pytest pytest-asyncio httpx)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pip install pytest pytest-asyncio httpx responses pyyaml ruamel.yaml cryptography openai httpx tenacity fastapi uvicorn textual rich)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pytest tests/ -x -q --tb=short -p no:cacheprovider)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pip install pytest-cov)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pytest tests/test_build_apk_workflow.py -v)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pytest tests/ -v --tb=short)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pytest tests/ --tb=short)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pytest tests/ -q)",
+      "Bash(C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe:*)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pytest tests/)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pytest tests/ --no-header -q)",
+      "Bash(\"C:/Users/Taimoor/AppData/Local/Programs/Python/Python311/python.exe\" -m pytest tests/test_build_apk_workflow.py -v --tb=short --no-header -q)"
     ]
   }
 }

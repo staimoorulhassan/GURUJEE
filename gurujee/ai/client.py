@@ -22,13 +22,14 @@ from gurujee.config.loader import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
-# Security anchors — always permitted regardless of provider config.
+# Fallback security anchors used when config/security.yaml cannot be loaded.
+# Authoritative list lives in config/security.yaml (network_allowlist.security_anchors).
 _SECURITY_ANCHOR_HOSTS = frozenset({
-    "gen.pollinations.ai",
+    "gen.pollinations.ai",  # always permit Pollinations default even if models.yaml missing
     "api.elevenlabs.io",
-    "sip.suii.us",       # Phase 2 SIP calling
-    "stun.l.google.com", # Phase 2 SIP STUN
-    "api.deepgram.com",  # Phase 2 optional cloud STT
+    "sip.suii.us",          # Phase 2 SIP calling
+    "stun.l.google.com",    # Phase 2 SIP STUN
+    "api.deepgram.com",     # Phase 2 optional cloud STT
 })
 
 # Backward-compat alias (existing tests do `from gurujee.ai.client import _ALLOWED_HOSTS`
@@ -419,8 +420,32 @@ class AIClient:
     # ------------------------------------------------------------------ #
 
     def _build_allowlist(self) -> frozenset[str]:
-        """Build the dynamic allowlist: security anchors + all provider base_urls."""
+        """Build the dynamic allowlist from config/security.yaml anchors + all provider base_urls.
+
+        Sources (merged):
+        1. Security anchors from config/security.yaml (network_allowlist.security_anchors).
+        2. base_url hostnames from all builtin_providers + custom_providers in models.yaml.
+        3. Hardcoded _SECURITY_ANCHOR_HOSTS fallback if security.yaml is unreadable.
+        """
         hosts: set[str] = set(_SECURITY_ANCHOR_HOSTS)
+
+        # Load security anchors from config/security.yaml
+        try:
+            security_cfg_path = self._models_config_path.parent / "security.yaml"
+            if security_cfg_path.exists():
+                sec_cfg = ConfigLoader.load_yaml(security_cfg_path)
+                anchors = (
+                    sec_cfg.get("network_allowlist", {}).get("security_anchors", [])
+                    or sec_cfg.get("anchor_hosts", [])  # legacy key
+                )
+                for entry in anchors:
+                    host = entry.get("host", "") if isinstance(entry, dict) else str(entry)
+                    if host:
+                        hosts.add(host)
+        except Exception:
+            pass
+
+        # Load provider base_urls from models.yaml
         try:
             cfg = ConfigLoader.load_yaml(self._models_config_path)
             for section in ("builtin_providers", "custom_providers"):
@@ -432,7 +457,10 @@ class AIClient:
                             hosts.add(host)
         except Exception:
             pass
-        return frozenset(hosts)
+
+        allowlist = frozenset(hosts)
+        logger.debug("AIClient: allowlist built (%d hosts): %s", len(allowlist), sorted(allowlist))
+        return allowlist
 
     def _check_allowlist(self, url: str) -> None:
         """

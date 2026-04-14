@@ -1,36 +1,64 @@
-# GURUJEE Network Security Configuration
-# ========================================
-# This file defines the security anchors for the GURUJEE network allowlist.
-# These hosts are always permitted regardless of the provider catalogue.
-# See gurujee/ai/client.py::_build_allowlist() and P4 in constitution.md.
-#
+# ================================================================
+# GURUJEE Security Configuration
+# Security-anchor hosts — always in the network allowlist
+# regardless of which AI providers are configured.
+# Referenced by gurujee/ai/client.py::_build_allowlist()
+# This file is version-controlled. Contains NO secrets.
 # IMPORTANT: Do NOT add AI provider endpoints here — those belong in models.yaml.
-# This file is for non-AI services required by the platform.
+# ================================================================
 
-# Security anchors — always permitted (Phase 2+ platform services)
-anchor_hosts:
-  - host: api.elevenlabs.io
-    purpose: "ElevenLabs TTS — AI voice synthesis"
-    phase: 1
+network_allowlist:
+  # These hosts are always permitted (never removed by provider changes).
+  # AI provider hosts are derived dynamically from config/models.yaml base_url fields.
+  security_anchors:
+    - host: api.elevenlabs.io
+      purpose: "Voice synthesis (TTS)"
+      required_for: [voice, tts]
+      phase: 1
 
-  - host: sip.suii.us
-    purpose: "SIP calling server — Phase 2 voice calls"
-    phase: 2
+    - host: sip.suii.us
+      purpose: "SIP calling"
+      required_for: [calls, sip]
+      phase: 2
 
-  - host: stun.l.google.com
-    purpose: "STUN server for SIP NAT traversal — Phase 2"
-    phase: 2
+    - host: stun.l.google.com
+      purpose: "STUN for SIP NAT traversal"
+      required_for: [calls, sip]
+      phase: 2
 
-  - host: api.deepgram.com
-    purpose: "Deepgram cloud STT — optional Phase 2 upgrade from Whisper"
-    phase: 2
-    optional: true
+    - host: api.deepgram.com
+      purpose: "Cloud STT (optional upgrade from Whisper tiny.en)"
+      required_for: [stt_cloud]
+      phase: 2
+      optional: true
 
-# Outbound policy
-policy:
-  # Deny all hosts not in the dynamic allowlist (models.yaml base_urls + anchor_hosts above)
-  default_action: deny
-  # Log denied attempts to data/automation.log
-  log_denied: true
-  # User-approved one-off hosts (populated by setup UI; stored in keystore)
+  # Policy for connection attempts to hosts not in the derived allowlist.
+  # Options: block | prompt_user | allow_once
+  unknown_host_policy: prompt_user
+
+  # Log all allowlist build events and violations.
+  log_blocked_requests: true
+  log_file: data/security.log
+
+  # User-approved one-off hosts (populated at runtime by PWA settings UI; stored in keystore).
   user_approved_hosts: []
+
+# ================================================================
+# Keystore policy (mirrors FR-019 / FR-023)
+# ================================================================
+keystore:
+  path: data/gurujee.keystore
+  algorithm: AES-256-GCM
+  key_derivation: PBKDF2-HMAC-SHA256
+  iterations: 260000          # reduced from 480k after ARM64 benchmarking
+  salt_source: device_fingerprint
+
+# ================================================================
+# PIN lockout policy (mirrors FR-023)
+# ================================================================
+pin_policy:
+  min_length: 4
+  max_length: 8
+  max_attempts: 3
+  lockout_seconds: 30
+  lockout_multiplier: 2       # doubles each failed lockout cycle

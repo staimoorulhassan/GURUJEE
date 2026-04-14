@@ -10,11 +10,8 @@ version = 1.0.0
 source.dir = ..
 source.include_exts = py,apk,sh,yaml,yml,json,md
 
-# Main entry module
-entrypoint = launcher/main.py
-
 # Requirements (ARM64 Termux-compatible)
-requirements = python3==3.11,kivy==2.3.0,requests,jnius,android
+requirements = python3==3.11.9,kivy==2.3.0,requests,jnius,android
 
 # Orientation and window
 orientation = portrait
@@ -46,7 +43,6 @@ icon.filename = %(source.dir)s/launcher/assets/icon.png
 
 # Gradle / build extras
 android.gradle_dependencies =
-android.add_compile_options = -source 11 -target 11
 android.enable_androidx = True
 
 # Release signing (set via env vars; do NOT hardcode)
@@ -58,7 +54,7 @@ android.enable_androidx = True
 [buildozer]
 
 # Log verbosity (0=quiet, 1=normal, 2=verbose)
-log_level = 1
+log_level = 2
 
 # Warn only; do not fail on missing optional assets
 warn_on_root = 1

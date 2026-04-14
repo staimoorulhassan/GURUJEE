@@ -22,3 +22,6 @@ Thumbs.db
 launcher/bin/
 launcher/.buildozer/
 launcher/__pycache__/
+
+# Claude Code worktrees
+.claude/worktrees/

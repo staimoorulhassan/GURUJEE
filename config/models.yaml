@@ -20,11 +20,14 @@ default:
 
 builtin_providers:
 
-  # --- Zero-key default ---
+  # --- Free default (API key required — get one free at https://auth.pollinations.ai) ---
   pollinations:
-    label: "Pollinations AI (Free, No Key)"
+    label: "Pollinations AI (Free API key required)"
     base_url: "https://gen.pollinations.ai/v1"
-    api_key_required: false
+    api_key_required: true
+    auth_env: "POLLINATIONS_API_KEY"
+    auth_url: "https://auth.pollinations.ai"
+    auth_note: "Free API key — sign up at https://auth.pollinations.ai (30 seconds, no credit card)"
     api_compat: "openai"
     models:
       - {id: nova-fast,      label: "Nova Fast",         ctx: 32000,  caps: [chat, tools]}

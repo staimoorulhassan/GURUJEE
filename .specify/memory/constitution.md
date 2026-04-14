@@ -21,7 +21,27 @@ Templates       :
   .specify/templates/tasks-template.md  ✅ no changes required
 Deferred TODOs  : T069 idle RAM profiling still unpaid — measure actual RSS before Phase 3.
 
---- Previous (1.0.0 → 1.1.0) ---
+--- Previous (1.1.1 → 1.2.1) ---
+Version change  : 1.2.0 → 1.2.1
+Bump rationale  : PATCH — factual correction: Pollinations now requires a free API key.
+                  P2 default updated from "zero-key" to "free key at auth.pollinations.ai".
+Modified        :
+  P2 — Default provider note updated: Auth now requires POLLINATIONS_API_KEY in keystore.
+       Bearer token header MUST be sent. Get free key at https://auth.pollinations.ai.
+Cascade         :
+  config/models.yaml — pollinations api_key_required: true, auth_env added.
+  spec.md FR-012/FR-013 — provider catalogue format documented.
+  spec.md FR-022 — dynamic allowlist (security.yaml + models.yaml).
+  spec.md FR-025 — SMS scoped to one-shot Phase 1.
+  plan.md — P2/P3 checks updated, heartbeat NFR corrected (8s), security diagram updated.
+  tasks.md — T005/T033/T067 updated, T075 added, US3/US4 labels corrected.
+  heartbeat_agent.py — PING_INTERVAL 30s → 8s, PONG_TIMEOUT 5s → 2s.
+  config/security.yaml — anchor hosts + pin_policy + keystore policy added.
+  gurujee/ai/client.py — _build_allowlist() reads from config/security.yaml.
+Deferred TODOs  : T069 idle RAM profiling pending on-device Android/Termux measurement.
+                  wizard.py and PWA settings panel need Pollinations key entry UI.
+
+--- Previous (1.1.0 → 1.1.1) ---
 Version change  : 1.0.0 → 1.1.0
 Bump rationale  : MINOR — three principles materially amended (P5, P6, P9).
 Modified        :
@@ -77,9 +97,11 @@ Pollinations is the zero-key default — GURUJEE MUST work out of the box with n
 - **Tier 2 — Custom**: ollama, openrouter, deepseek, groq, mistral, and 20+ more.
   Defined by `base_url` + `api_compat` in `models.yaml`.
 
-**Default** (zero-key, works immediately):
+**Default** (free provider, API key required):
 ```
-pollinations/nova-fast  →  https://gen.pollinations.ai/v1  (OpenAI-compatible, no auth)
+pollinations/nova-fast  →  https://gen.pollinations.ai/v1  (OpenAI-compatible)
+Auth: POLLINATIONS_API_KEY stored in keystore (free key at https://auth.pollinations.ai).
+The Authorization: Bearer <key> header MUST be sent for all Pollinations requests.
 ```
 
 **Rules:**
@@ -274,4 +296,4 @@ Rules:
 - PRs that touch architecture or cross-cutting concerns MUST include a Constitution Check
   confirming no P1–P10 violations, or explicitly documenting approved exceptions.
 
-**Version**: 1.2.0 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-12
+**Version**: 1.2.1 | **Ratified**: 2026-04-11 | **Last Amended**: 2026-04-14

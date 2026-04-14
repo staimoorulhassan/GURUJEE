@@ -52,8 +52,8 @@ integration via the openai SDK with streaming. The daemon targets ≤50 MB RAM a
 | Principle | Status | Evidence |
 |-----------|--------|----------|
 | **P1** Minimal Memory Footprint | ✅ PASS | No ML models loaded at idle. STT/TTS deferred to Phase 2. sqlite3 + asyncio + Textual idle well under 50 MB (R-002, R-008). |
-| **P2** Single Endpoint AI | ✅ PASS | `AsyncOpenAI(base_url="https://gen.pollinations.ai/v1", api_key="")`. Model IDs from `config/models.yaml`. No hardcoded model in logic (R-006). |
-| **P3** No Root Required | ✅ PASS | All Termux operations are user-space. `android_id` via `settings get` (no root). Shizuku guided but not used until Phase 3. |
+| **P2** Provider Catalogue AI (v1.2.0) | ✅ PASS | `AIClient` resolves `provider/model-id` strings via `config/models.yaml` catalogue (ADR-005). Pollinations is default zero-key provider. No model ID or endpoint URL hardcoded in logic. |
+| **P3** No Root Required | ✅ PASS | All Termux operations are user-space. `android_id` via `settings get` (no root). AutomationAgent implemented always-on in Phase 1 (ADR-004). All automation via `rish` (Shizuku shell), no root calls. Phase 1 scope confirmed by spec US3/US4 and ADR-003. |
 | **P4** Security First | ✅ PASS | AES-256-GCM keystore; PBKDF2-HMAC-SHA256 key derivation (R-004). Network allowlist enforced in `ai/client.py`. No secrets in config. Consent gate before voice sample (FR-001, US1-S5). |
 | **P5** Zero-Touch Setup | ✅ PASS | Launcher APK handles Termux install → bootstrap → daemon start → PWA load. User never sees terminal. `data/setup_state.yaml` persists progress. |
 | **P6** Python-First Stack | ✅ PASS | FastAPI/uvicorn + PWA (HTML/CSS/JS served by Python). No Node.js, no Electron, no JVM. FastAPI binds to 127.0.0.1 only (P4/P6 security). |
@@ -226,12 +226,12 @@ files by FastAPI; loaded in Launcher APK WebView. Non-technical users never see 
 
 | Requirement | Target | Implementation lever |
 |-------------|--------|---------------------|
-| Idle RAM (daemon + FastAPI) | ≤ 50 MB | uvicorn single worker, shared asyncio loop; no ML at idle; deque(10) |
+| Idle RAM (daemon + FastAPI) | ≤ 50 MB | uvicorn single worker, shared asyncio loop; no ML at idle; deque(10). Windows dev estimate: ~35–45 MB (data/benchmarks/idle-ram-001.txt). **T069 pending**: authoritative measurement required on ARM64/Termux before Phase 3. |
 | First AI response (SSE) | < 5 s (3G) | AsyncOpenAI streaming; first SSE chunk to PWA before completion |
 | PWA first paint | < 1 s (localhost) | Static files <200 KB total; service worker caches after first load |
 | Automation command round-trip | < 3 s | Shizuku `rish` subprocess; async subprocess with timeout |
 | TUI keystroke render (dev) | < 100 ms | Textual reactive updates; no blocking in UI thread |
-| Daemon restart detection | < 10 s | HeartbeatAgent 30 s ping interval; 5 s timeout; restart on no-pong |
+| Daemon restart detection | < 10 s | HeartbeatAgent 8 s ping interval; 2 s timeout; worst-case detection = 10 s; restart on no-pong |
 | APK → chat ready time | < 3 min | APK polls `/health`; daemon starts fast; setup resumes from state |
 | Memory DB backup | weekly | asyncio scheduled task in MemoryAgent |
 
@@ -256,10 +256,12 @@ PIN lockout policy (FR-023):
   3 wrong attempts → 30-second lockout (exponential backoff on further failures)
   Forgot PIN → wipe data/gurujee.keystore + re-run guided setup (consequence shown in UI)
 
-Network allowlist (ai/client.py):
-  - gen.pollinations.ai     (AI inference)
-  - api.elevenlabs.io       (voice clone setup)
-  All other outbound: blocked / warned
+Network allowlist (ai/client.py::_build_allowlist()):
+  Dynamic — built at daemon startup from:
+  - All base_url hostnames from config/models.yaml (all active providers)
+  - Security anchors from config/security.yaml:
+      api.elevenlabs.io, sip.suii.us, stun.l.google.com, api.deepgram.com
+  All other outbound: AllowlistViolation raised / user prompted for approval
 ```
 
 ---
