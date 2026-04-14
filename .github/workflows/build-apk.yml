@@ -87,6 +87,7 @@ jobs:
           ANDROID_SDK_ROOT: /home/runner/.buildozer/android/platform/android-sdk
           ANDROID_HOME: /home/runner/.buildozer/android/platform/android-sdk
         run: |
+          set -o pipefail
           cd launcher
           buildozer android debug 2>&1 | tee ../build.log
           echo "=== APK files found ==="
