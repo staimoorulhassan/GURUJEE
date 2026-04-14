@@ -43,7 +43,6 @@ icon.filename = %(source.dir)s/launcher/assets/icon.png
 
 # Gradle / build extras
 android.gradle_dependencies =
-android.add_compile_options = -source 11 -target 11
 android.enable_androidx = True
 
 # Release signing (set via env vars; do NOT hardcode)
