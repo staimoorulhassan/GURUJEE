@@ -11,7 +11,7 @@ source.dir = ..
 source.include_exts = py,apk,sh,yaml,yml,json,md
 
 # Requirements (ARM64 Termux-compatible)
-requirements = python3==3.11,kivy==2.3.0,requests,jnius,android
+requirements = python3==3.11.9,kivy==2.3.0,requests,jnius,android
 
 # Orientation and window
 orientation = portrait
