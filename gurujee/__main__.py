@@ -66,9 +66,6 @@ def main() -> NoReturn:
         SetupWizard(data_dir=data_dir).run()
         sys.exit(0)
 
-    # Prompt for PIN before starting daemon
-    keystore = _prompt_pin(keystore_path, data_dir)
-
     # --restart: kill existing daemon process then fall through to start
     if args.restart:
         _restart_daemon(data_dir)
@@ -79,15 +76,41 @@ def main() -> NoReturn:
 
     if headless_mode:
         os.environ["GURUJEE_HEADLESS"] = "1"
+        # Skip PIN prompt when stdin is not a terminal (e.g. Termux:Boot auto-start).
+        # API keys come from ~/.gurujee.env sourced by the boot script.
+        if not sys.stdin.isatty():
+            keystore = None
+        else:
+            keystore = _prompt_pin(keystore_path, data_dir)
+
         from gurujee.daemon.gateway_daemon import GatewayDaemon
-        asyncio.run(GatewayDaemon(keystore=keystore).start())
-    elif tui_mode:
-        from gurujee.tui.app import GurujeeApp
-        GurujeeApp(keystore=keystore).run()
+        from gurujee.server.app import create_app
+        import uvicorn
+
+        async def _run_headless() -> None:
+            gateway = GatewayDaemon(keystore=keystore)
+            app = create_app(gateway)
+            config = uvicorn.Config(
+                app,
+                host="127.0.0.1",
+                port=7171,
+                log_level="warning",
+                loop="asyncio",
+            )
+            server = uvicorn.Server(config)
+            await asyncio.gather(gateway.start(), server.serve())
+
+        asyncio.run(_run_headless())
     else:
-        # Default: TUI + daemon
-        from gurujee.tui.app import GurujeeApp
-        GurujeeApp(keystore=keystore).run()
+        # TUI / default: PIN prompt required for interactive use
+        keystore = _prompt_pin(keystore_path, data_dir)
+        if tui_mode:
+            from gurujee.tui.app import GurujeeApp
+            GurujeeApp(keystore=keystore).run()
+        else:
+            # Default: TUI + daemon
+            from gurujee.tui.app import GurujeeApp
+            GurujeeApp(keystore=keystore).run()
 
     sys.exit(0)
 
