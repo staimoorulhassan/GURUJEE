@@ -154,14 +154,18 @@ def copy_to_clipboard(text: str) -> bool:
         from kivy.clock import Clock  # type: ignore[import-untyped]
 
         PythonActivity = autoclass("org.kivy.android.PythonActivity")
-        ClipboardManager = autoclass("android.content.ClipboardManager")
         ClipData = autoclass("android.content.ClipData")
         activity = PythonActivity.mActivity
 
         def _copy(_dt: float) -> None:
-            cm = activity.getSystemService(ClipboardManager.CLIPBOARD_SERVICE)
-            clip = ClipData.newPlainText("GURUJEE", text)
-            cm.setPrimaryClip(clip)
+            try:
+                # Use string literal — more reliable than accessing inherited
+                # static field CLIPBOARD_SERVICE via jnius autoclass.
+                cm = activity.getSystemService("clipboard")
+                clip = ClipData.newPlainText("GURUJEE", text)
+                cm.setPrimaryClip(clip)
+            except Exception:
+                pass
 
         Clock.schedule_once(_copy, 0)
         return True
