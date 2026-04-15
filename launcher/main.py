@@ -36,6 +36,7 @@ from launcher.bootstrap import (
     open_termux,
     open_url,
     poll_daemon_ready,
+    run_command_in_termux,
 )
 
 _WEBVIEW_URL = "http://localhost:7171"
@@ -322,7 +323,24 @@ class SetupScreen(Screen):
         Clock.schedule_once(lambda _dt: setattr(self._feedback, "text", ""), 2)
 
     def _on_open_termux(self, _btn: Button) -> None:
-        open_termux()
+        # Always copy the command first so clipboard is ready to paste
+        copy_to_clipboard(_INSTALL_COMMAND)
+
+        # Try to auto-run the install command in Termux via RUN_COMMAND intent.
+        # This works only after install.sh has set allow-external-apps=true.
+        dispatched = run_command_in_termux(_INSTALL_COMMAND)
+
+        if dispatched:
+            msg = "Setup started in Termux! Return here when done."
+        else:
+            # Fallback: open Termux so user can paste manually
+            open_termux()
+            msg = "Termux opened. Command copied — long-press in Termux to paste, then Enter."
+
+        def _u(_dt: float) -> None:
+            self._feedback.text = msg
+        Clock.schedule_once(_u, 0)
+        Clock.schedule_once(lambda _dt: setattr(self._feedback, "text", ""), 8)
 
     def _on_check(self, _btn: Button) -> None:
         App.get_running_app().go_to("connecting")
@@ -425,7 +443,7 @@ class ConnectingScreen(Screen):
         t.start()
 
     def _poll_thread(self) -> None:
-        _TIMEOUT = 60
+        _TIMEOUT = 120
 
         def _tick(elapsed: int, remaining: int) -> None:
             pct = int(100 * elapsed / _TIMEOUT)

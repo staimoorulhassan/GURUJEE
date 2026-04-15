@@ -231,7 +231,21 @@ class SetupWizard:
             state["steps"]["accessibility_apk"]["apk_sha256"] = actual_sha256
 
     def _step_permissions_inner(self, state: Optional[dict] = None) -> None:
-        """Request all required Android permissions."""
+        """Request all required Android permissions via Termux:API."""
+        import shutil
+
+        if shutil.which("termux-permission") is None:
+            _console.print(
+                "[yellow]⚠ termux-permission not found.[/yellow]\n"
+                "Install [bold]Termux:API[/bold] from F-Droid to enable full permission support:\n"
+                "  pkg install termux-api\n"
+                "Skipping this step — you can re-run setup later to grant permissions."
+            )
+            if state and "steps" in state:
+                state["steps"]["permissions"]["skipped"] = True
+                state["steps"]["permissions"]["reason"] = "termux-api-not-installed"
+            return
+
         permissions = [
             "android.permission.RECORD_AUDIO",
             "android.permission.READ_CONTACTS",
@@ -241,13 +255,17 @@ class SetupWizard:
         granted: list[str] = []
         denied: list[str] = []
         for perm in permissions:
-            result = subprocess.run(["termux-permission", perm], capture_output=True)
-            if result.returncode == 0:
-                granted.append(perm)
-                _console.print(f"  [green]✓[/green] {perm}")
-            else:
+            try:
+                result = subprocess.run(["termux-permission", perm], capture_output=True, timeout=10)
+                if result.returncode == 0:
+                    granted.append(perm)
+                    _console.print(f"  [green]✓[/green] {perm}")
+                else:
+                    denied.append(perm)
+                    _console.print(f"  [yellow]✗[/yellow] {perm} (denied — some features may not work)")
+            except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
                 denied.append(perm)
-                _console.print(f"  [yellow]✗[/yellow] {perm} (denied — some features may not work)")
+                _console.print(f"  [yellow]✗[/yellow] {perm} ({exc})")
 
         if state and "steps" in state:
             state["steps"]["permissions"]["granted"] = granted
@@ -385,11 +403,27 @@ class SetupWizard:
                 state["steps"]["voice_sample"]["consent_given"] = False
             return
 
+        import shutil
+        if shutil.which("termux-microphone-record") is None:
+            _console.print(
+                "[yellow]⚠ termux-microphone-record not found.[/yellow]\n"
+                "Install Termux:API to enable voice recording:  pkg install termux-api\n"
+                "Skipping voice setup."
+            )
+            if state and "steps" in state:
+                state["steps"]["voice_sample"]["skipped"] = True
+                state["steps"]["voice_sample"]["reason"] = "termux-api-not-installed"
+            return
+
         sample_path = Path("/tmp/voice_sample.wav")
         _console.print("Recording 30 seconds of audio...")
-        result = subprocess.run(
-            ["termux-microphone-record", "-l", "30", "-f", str(sample_path)]
-        )
+        try:
+            result = subprocess.run(
+                ["termux-microphone-record", "-l", "30", "-f", str(sample_path)],
+                timeout=40,
+            )
+        except subprocess.TimeoutExpired:
+            raise SetupStepError("recording_failed", "termux-microphone-record timed out.")
         if result.returncode != 0 or not sample_path.exists():
             raise SetupStepError("recording_failed", "Could not record voice sample.")
 
@@ -482,13 +516,26 @@ class SetupWizard:
             raise SetupStepError("elevenlabs_failed", str(exc)) from exc
 
     def _start_daemon_background(self) -> None:
-        """Start GatewayDaemon as a background asyncio task."""
+        """Start GatewayDaemon + uvicorn as a background thread."""
         import threading
 
         def _run() -> None:
             import asyncio
             from gurujee.daemon.gateway_daemon import GatewayDaemon
-            asyncio.run(GatewayDaemon().start())
+            from gurujee.server.app import create_app
+            import uvicorn
+
+            async def _go() -> None:
+                gateway = GatewayDaemon()
+                app = create_app(gateway)
+                config = uvicorn.Config(
+                    app, host="127.0.0.1", port=7171,
+                    log_level="warning", loop="asyncio",
+                )
+                server = uvicorn.Server(config)
+                await asyncio.gather(gateway.start(), server.serve())
+
+            asyncio.run(_go())
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()

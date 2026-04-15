@@ -25,14 +25,26 @@ async def health(request: Request) -> JSONResponse:
         for name, state in gateway.agent_states.items()
     }
     response: dict[str, Any] = {"status": "ready", "agents": agent_statuses}
+    warnings: list[str] = []
+
+    # Surface any crashed agents as non-fatal warnings
+    from gurujee.daemon.gateway_daemon import AgentStatus
+    errored = [
+        name for name, state in gateway.agent_states.items()
+        if state.status == AgentStatus.ERROR
+    ]
+    if errored:
+        warnings.append(f"agent_errors:{','.join(errored)}")
 
     # Shizuku health check — non-fatal warning
     try:
         from gurujee.automation.executor import ShizukuExecutor  # lazy import
         executor = ShizukuExecutor()
         if not executor.is_available():
-            response["warnings"] = ["shizuku_inactive"]
+            warnings.append("shizuku_inactive")
     except Exception:
-        response["warnings"] = ["shizuku_inactive"]
+        warnings.append("shizuku_inactive")
 
+    if warnings:
+        response["warnings"] = warnings
     return JSONResponse(response)

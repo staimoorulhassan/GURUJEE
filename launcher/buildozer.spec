@@ -30,7 +30,8 @@ android.permissions = \
     REQUEST_INSTALL_PACKAGES, \
     READ_EXTERNAL_STORAGE, \
     WRITE_EXTERNAL_STORAGE, \
-    QUERY_ALL_PACKAGES
+    QUERY_ALL_PACKAGES, \
+    com.termux.permission.RUN_COMMAND
 
 # Bundle Termux + Termux:API APKs as assets (copied to /sdcard/DCIM/ on first run)
 # Place termux.apk and termux-api.apk in launcher/assets/ before building.

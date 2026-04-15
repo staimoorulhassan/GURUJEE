@@ -1,11 +1,12 @@
 """Launcher bootstrap helpers (T058 / T059 redesign).
 
 Provides only what the 4-screen onboarding flow actually needs:
-  - check_termux_installed()  — PackageManager API; pm-shell fallback
-  - open_termux()             — launch Termux via Intent
-  - open_url(url)             — open URL in system browser via ACTION_VIEW
-  - copy_to_clipboard(text)   — copy text using Android ClipboardManager
-  - poll_daemon_ready(...)    — GET /health every 3 s with tick_cb
+  - check_termux_installed()       — PackageManager API; pm-shell fallback
+  - open_termux()                  — launch Termux via Intent
+  - open_url(url)                  — open URL in system browser via ACTION_VIEW
+  - copy_to_clipboard(text)        — copy text using Android ClipboardManager
+  - run_command_in_termux(cmd)     — run cmd in Termux via RUN_COMMAND intent
+  - poll_daemon_ready(...)         — GET /health every 3 s with tick_cb
 """
 from __future__ import annotations
 
@@ -138,11 +139,70 @@ def copy_to_clipboard(text: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Run command in Termux via RUN_COMMAND intent
+# ---------------------------------------------------------------------------
+
+def run_command_in_termux(cmd: str) -> bool:
+    """Send a com.termux.RUN_COMMAND intent to execute *cmd* in a visible Termux session.
+
+    Requires ``allow-external-apps = true`` in ``~/.termux/termux.properties``
+    (install.sh sets this automatically). Returns True if the intent was sent;
+    silently returns False on any failure so callers can fall back gracefully.
+    """
+    # jnius / Android Intent path (preferred — works inside the APK)
+    try:
+        from jnius import autoclass  # type: ignore[import-untyped]
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        Intent = autoclass("android.content.Intent")
+        activity = PythonActivity.mActivity
+
+        intent = Intent()
+        intent.setAction("com.termux.RUN_COMMAND")
+        intent.setPackage(_TERMUX_PACKAGE)
+        intent.setClassName(_TERMUX_PACKAGE, f"{_TERMUX_PACKAGE}.app.RunCommandService")
+        intent.putExtra("com.termux.RUN_COMMAND_PATH",
+                        "/data/data/com.termux/files/usr/bin/bash")
+        # Pass the whole install command as a single "-c <cmd>" invocation
+        intent.putExtra("com.termux.RUN_COMMAND_ARGUMENTS", ["-c", cmd])
+        intent.putExtra("com.termux.RUN_COMMAND_BACKGROUND", False)
+        intent.putExtra("com.termux.RUN_COMMAND_WORKDIR",
+                        "/data/data/com.termux/files/home")
+        # Use startForegroundService so Android 9+ doesn't block it
+        try:
+            activity.startForegroundService(intent)
+        except Exception:
+            activity.startService(intent)
+        return True
+    except Exception:
+        pass
+
+    # am-shell fallback (works if /system/bin/am is accessible in the APK sandbox)
+    try:
+        result = subprocess.run(
+            [
+                "/system/bin/am", "startservice",
+                "--user", "0",
+                "-n", f"{_TERMUX_PACKAGE}/.app.RunCommandService",
+                "--es", "com.termux.RUN_COMMAND_PATH",
+                "/data/data/com.termux/files/usr/bin/bash",
+                "--esa", "com.termux.RUN_COMMAND_ARGUMENTS",
+                f"-c,{cmd}",
+                "--ez", "com.termux.RUN_COMMAND_BACKGROUND", "false",
+            ],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Daemon readiness
 # ---------------------------------------------------------------------------
 
 def poll_daemon_ready(
-    timeout_seconds: int = 60,
+    timeout_seconds: int = 120,
     tick_cb: Optional[Callable[[int, int], None]] = None,
 ) -> bool:
     """Poll GET /health every 3 s until status=='ready' or timeout.
