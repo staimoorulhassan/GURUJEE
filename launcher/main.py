@@ -31,7 +31,6 @@ from kivy.uix.screenmanager import Screen, ScreenManager
 from kivy.uix.widget import Widget
 
 from launcher.bootstrap import (
-    check_termux_installed,
     copy_to_clipboard,
     open_termux,
     open_url,
@@ -205,12 +204,11 @@ class WelcomeScreen(Screen):
         open_url(_FDROID_TERMUX_URL)
 
     def _on_have_termux(self, _btn: Button) -> None:
-        if check_termux_installed():
-            App.get_running_app().go_to("setup")
-        else:
-            def _u(_dt: float) -> None:
-                self._status.text = "Termux not detected — please install it first."
-            Clock.schedule_once(_u, 0)
+        # Trust the user — don't gate on PackageManager detection.
+        # Android 13+ visibility restrictions make getPackageInfo and
+        # resolveActivity unreliable without a <queries> manifest entry.
+        # ConnectingScreen handles the daemon-not-running case gracefully.
+        App.get_running_app().go_to("setup")
 
 
 # ---------------------------------------------------------------------------
