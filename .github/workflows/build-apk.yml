@@ -55,15 +55,19 @@ jobs:
           SDK="$ANDROID_SDK_ROOT"
           mkdir -p "$SDK"
 
-          # Download cmdline-tools (stable r11 — 11076708)
-          wget -q \
-            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
-            -O /tmp/cmdline-tools.zip
-          unzip -q /tmp/cmdline-tools.zip -d /tmp/clt
-          mkdir -p "$SDK/cmdline-tools/latest"
-          mv /tmp/clt/cmdline-tools/* "$SDK/cmdline-tools/latest/"
+          # Download cmdline-tools only if not already present (cache hit idempotency).
+          if [ ! -f "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+            wget -q \
+              https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+              -O /tmp/cmdline-tools.zip
+            unzip -q /tmp/cmdline-tools.zip -d /tmp/clt
+            # Empty the target before moving to avoid nested directories on re-runs.
+            rm -rf "$SDK/cmdline-tools/latest"
+            mkdir -p "$SDK/cmdline-tools/latest"
+            mv /tmp/clt/cmdline-tools/* "$SDK/cmdline-tools/latest/"
+          fi
 
-          # Shim: point the legacy path buildozer probes to the real sdkmanager
+          # Shim: always re-create so it is present even after a partial cache restore.
           mkdir -p "$SDK/tools/bin"
           ln -sf "$SDK/cmdline-tools/latest/bin/sdkmanager" "$SDK/tools/bin/sdkmanager"
 
