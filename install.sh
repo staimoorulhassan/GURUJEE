@@ -23,8 +23,12 @@ fi
 echo "=== GURUJEE Installer ==="
 echo "Install directory: $GURUJEE_DIR"
 
-# Update and install base packages
-pkg update -y && pkg upgrade -y
+# Update and install base packages.
+# DEBIAN_FRONTEND=noninteractive + --force-confold prevents dpkg from
+# prompting about config files when stdin is a pipe (curl | bash).
+export DEBIAN_FRONTEND=noninteractive
+pkg update -y
+pkg upgrade -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef"
 pkg install -y python git
 
 # Install Rust toolchain for Python packages requiring compilation

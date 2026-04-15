@@ -158,9 +158,15 @@ class SetupWizard:
 
     def _step_packages_inner(self, state: Optional[dict] = None) -> None:
         """Install required Termux packages and Python dependencies."""
+        import os as _os
+        _os.environ.setdefault("DEBIAN_FRONTEND", "noninteractive")
+        _dpkg_opts = [
+            "-o", "Dpkg::Options::=--force-confold",
+            "-o", "Dpkg::Options::=--force-confdef",
+        ]
         for cmd in [
             ["pkg", "update", "-y"],
-            ["pkg", "upgrade", "-y"],
+            ["pkg", "upgrade", "-y"] + _dpkg_opts,
             ["pkg", "install", "-y", "python", "git"],
         ]:
             for attempt in range(3):
