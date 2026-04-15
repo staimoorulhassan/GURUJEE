@@ -25,22 +25,53 @@ _TERMUX_PACKAGE = "com.termux"
 # ---------------------------------------------------------------------------
 
 def _pkg_installed_jnius(package: str) -> Optional[bool]:
-    """Return True/False via Android PackageManager, or None if jnius unavailable."""
+    """Return True/False via Android PackageManager, or None if jnius unavailable.
+
+    Uses two strategies in order:
+    1. getPackageInfo() — works when QUERY_ALL_PACKAGES appop is granted.
+    2. resolveActivity() with explicit component — bypasses Android 11+
+       package-visibility restrictions entirely (no permission needed).
+    """
     try:
         from jnius import autoclass  # type: ignore[import-untyped]
         PythonActivity = autoclass("org.kivy.android.PythonActivity")
         pm = PythonActivity.mActivity.getPackageManager()
+
+        # Strategy 1: direct package info lookup
         try:
             pm.getPackageInfo(package, 0)
             return True
         except Exception:
-            return False
+            pass
+
+        # Strategy 2: explicit-component resolveActivity — exempt from visibility gate
+        try:
+            Intent = autoclass("android.content.Intent")
+            intent = Intent()
+            # Termux main activity — well-known stable component name
+            intent.setClassName(package, f"{package}.app.TermuxActivity")
+            return pm.resolveActivity(intent, 0) is not None
+        except Exception:
+            pass
+
+        return False
     except Exception:
         return None
 
 
 def _pkg_installed_pm(package: str) -> bool:
-    """Fallback: call /system/bin/pm directly."""
+    """Fallback: use 'pm path <package>' (less restricted than 'pm list packages')."""
+    try:
+        # 'pm path <pkg>' returns 'package:/path/apk' if installed, blank/error if not
+        result = subprocess.run(
+            ["/system/bin/pm", "path", package],
+            capture_output=True, text=True, timeout=5,
+        )
+        if "package:" in result.stdout:
+            return True
+    except Exception:
+        pass
+    # Last resort: pm list packages filter
     try:
         result = subprocess.run(
             ["/system/bin/pm", "list", "packages", package],
