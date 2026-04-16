@@ -85,7 +85,7 @@ class SetupWizard:
         step_fns: dict[str, Callable[[dict[str, Any]], None]] = {
             "packages": self._step_packages_inner,
             "shizuku": self._step_shizuku_inner,
-            "accessibility_apk": self._step_accessibility_apk_inner,
+        #    "accessibility_apk": self._step_accessibility_apk_inner,
             "permissions": self._step_permissions_inner,
             "keystore_pin": self._step_keystore_pin_inner,
             "pollinations_key": self._step_pollinations_key_inner,
