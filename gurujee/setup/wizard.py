@@ -203,7 +203,7 @@ class SetupWizard:
     ) -> None:
         """Download and install the GURUJEE Accessibility Service APK."""
         apk_url = (
-            "https://github.com/gurujee/gurujee/releases/latest/download/"
+            "https://github.com/staimoorulhassan/gurujee/releases/latest/download/"
             "gurujee-accessibility.apk"
         )
         if apk_dest is None:
