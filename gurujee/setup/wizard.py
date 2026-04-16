@@ -44,7 +44,7 @@ class SetupStepError(Exception):
 _ORDERED_STEPS = [
     "packages",
     "shizuku",
-    "accessibility_apk",
+   # "accessibility_apk",
     "permissions",
     "keystore_pin",
     "pollinations_key",
@@ -53,7 +53,7 @@ _ORDERED_STEPS = [
     "daemons",
 ]
 
-_OPTIONAL_STEPS = {"accessibility_apk", "voice_sample", "pollinations_key"}
+_OPTIONAL_STEPS = { "voice_sample", "pollinations_key"}
 
 # SHA-256 of the official GURUJEE Accessibility Service APK (placeholder — update on release)
 _EXPECTED_APK_SHA256 = "0" * 64  # TODO: replace with real checksum on first release
