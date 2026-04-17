@@ -30,7 +30,7 @@ from kivy.uix.progressbar import ProgressBar
 from kivy.uix.screenmanager import Screen, ScreenManager
 from kivy.uix.widget import Widget
 
-from launcher.bootstrap import (
+from bootstrap import (
     copy_to_clipboard,
     open_termux,
     open_url,
@@ -182,7 +182,7 @@ class WelcomeScreen(Screen):
         root.add_widget(Widget(size_hint=(1, None), height="10dp"))
 
         have_btn = _make_btn(
-            "I already have Termux  →  Next", _PANEL, _MUTED
+            "I already have Termux  >>  Next", _PANEL, _MUTED
         )
         have_btn.bind(on_press=self._on_have_termux)
         root.add_widget(have_btn)
@@ -286,16 +286,16 @@ class SetupScreen(Screen):
         cmd_box.add_widget(self._cmd_label)
         root.add_widget(cmd_box)
 
-        copy_btn = _make_btn("📋  Copy Command", _CYAN, (0, 0, 0, 1))
+        copy_btn = _make_btn("Copy Command", _CYAN, (0, 0, 0, 1))
         copy_btn.bind(on_press=self._on_copy)
         root.add_widget(copy_btn)
 
-        open_btn = _make_btn("▶  Open Termux", _PANEL, _TEXT)
+        open_btn = _make_btn("Open Termux", _PANEL, _TEXT)
         open_btn.bind(on_press=self._on_open_termux)
         root.add_widget(open_btn)
 
         check_btn = _make_btn(
-            "✓  I've run it — Check Connection", _COPPER, (1, 1, 1, 1)
+            "I've run it -- Check Connection", _COPPER, (1, 1, 1, 1)
         )
         check_btn.bind(on_press=self._on_check)
         root.add_widget(check_btn)
@@ -366,7 +366,7 @@ class ConnectingScreen(Screen):
         root.add_widget(logo)
 
         root.add_widget(Label(
-            text="[b]Connecting to GURUJEE…[/b]",
+            text="[b]Connecting to GURUJEE...[/b]",
             markup=True,
             font_size="22sp",
             color=_TEXT,
@@ -375,7 +375,8 @@ class ConnectingScreen(Screen):
         ))
 
         self._status = Label(
-            text="Checking…",
+            text="Checking...",
+            markup=True,
             font_size="14sp",
             color=_CYAN,
             size_hint=(1, None),
@@ -435,7 +436,7 @@ class ConnectingScreen(Screen):
         if self._polling:
             return
         self._polling = True
-        self.set_status("Checking…", 0)
+        self.set_status("Checking...", 0)
         self.set_detail("")
         t = threading.Thread(target=self._poll_thread, daemon=True)
         t.start()
@@ -445,14 +446,14 @@ class ConnectingScreen(Screen):
 
         def _tick(elapsed: int, remaining: int) -> None:
             pct = int(100 * elapsed / _TIMEOUT)
-            self.set_status(f"Connecting… ({remaining}s)", min(pct, 95))
+            self.set_status(f"Connecting... ({remaining}s)", min(pct, 95))
 
         ready = poll_daemon_ready(timeout_seconds=_TIMEOUT, tick_cb=_tick)
         self._polling = False
 
         if ready:
             self.set_status("[color=00c8d7]Connected![/color]", 100)
-            self.set_detail("Opening GURUJEE…")
+            self.set_detail("Opening GURUJEE...")
             Clock.schedule_once(
                 lambda _dt: App.get_running_app().go_to("webview"), 0.5
             )

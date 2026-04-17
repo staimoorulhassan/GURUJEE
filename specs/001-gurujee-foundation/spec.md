@@ -454,8 +454,8 @@ without any terminal interaction.
 
 - The user's Android device has at least 3 GB RAM and 1 GB free storage.
 - Termux is installed from F-Droid (not Play Store) to allow background process execution.
-- The AI endpoint (`gen.pollinations.ai`) does not require authentication for Phase 1; if
-  this changes, it constitutes a P2 violation requiring a constitution amendment.
+- The AI endpoint (`gen.pollinations.ai`) requires API key authentication for Phase 1; if
+  this requirement changes, it constitutes a P2 violation requiring a constitution amendment.
 - Shizuku activation and device automation (AutomationAgent + ShizukuExecutor) are both
   Phase 1 scope. Automation was originally planned for Phase 3 but was moved forward
   during Phase 1 implementation (see ADR-003 and ADR-004); all 66 foundation tasks include

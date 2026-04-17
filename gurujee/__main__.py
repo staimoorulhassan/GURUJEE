@@ -59,20 +59,23 @@ def main() -> NoReturn:
         _tail_logs(data_dir)
         sys.exit(0)
 
-    # --setup / --reset: run guided setup wizard
-    is_first_run = _is_first_run(setup_state_path)
-    if is_first_run or args.setup or args.reset:
-        from gurujee.setup.wizard import SetupWizard
-        SetupWizard(data_dir=data_dir).run()
-        sys.exit(0)
+    # Determine mode FIRST so headless always wins over the setup check.
+    headless_mode = args.headless or args.start
+    tui_mode = args.tui
 
     # --restart: kill existing daemon process then fall through to start
     if args.restart:
         _restart_daemon(data_dir)
         sys.exit(0)
 
-    headless_mode = args.headless or args.start
-    tui_mode = args.tui
+    # --setup / --reset: run guided setup wizard.
+    # SKIP this check in headless mode — the daemon must start regardless of
+    # whether setup_state.yaml exists (e.g. Termux:Boot, nohup from install.sh).
+    is_first_run = _is_first_run(setup_state_path)
+    if (is_first_run or args.setup or args.reset) and not headless_mode:
+        from gurujee.setup.wizard import SetupWizard
+        SetupWizard(data_dir=data_dir).run()
+        sys.exit(0)
 
     if headless_mode:
         os.environ["GURUJEE_HEADLESS"] = "1"

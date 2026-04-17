@@ -31,9 +31,9 @@ pkg update -y
 pkg upgrade -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef"
 pkg install -y python git
 
-# Install Rust toolchain for Python packages requiring compilation
-pkg install -y rust binutils clang make
-echo "Rust installed: $(cargo --version)"
+# Install native packages via Termux pkg to avoid compiling from source.
+# cryptography ships no AArch64-Android wheel on PyPI; use Termux's pre-built binary.
+pkg install -y libffi openssl python-cryptography clang make
 
 # Clone or update repo
 if [ -d "$GURUJEE_DIR/.git" ]; then

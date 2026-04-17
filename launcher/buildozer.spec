@@ -6,12 +6,12 @@ package.name = gurujee
 package.domain = ai.gurujee
 version = 1.0.0
 
-# Source files
-source.dir = ..
-source.include_exts = py,apk,sh,yaml,yml,json,md
+# Source files (Thin launcher)
+source.dir = .
+source.include_exts = py,png,jpg,apk,sh,yaml,yml,json,md,kv
 
 # Requirements (ARM64 Termux-compatible)
-requirements = python3==3.11.9,kivy==2.3.0,requests,jnius,android
+requirements = python3,kivy,requests,jnius,android
 
 # Orientation and window
 orientation = portrait
@@ -33,29 +33,14 @@ android.permissions = \
     QUERY_ALL_PACKAGES, \
     com.termux.permission.RUN_COMMAND
 
-# Bundle Termux + Termux:API APKs as assets (copied to /sdcard/DCIM/ on first run)
-# Place termux.apk and termux-api.apk in launcher/assets/ before building.
-android.add_aars =
-android.add_jars =
-
-# Presplash and icon (place files in launcher/assets/)
-presplash.filename = %(source.dir)s/launcher/assets/presplash.png
-icon.filename = %(source.dir)s/launcher/assets/icon.png
+# Presplash and icon
+presplash.filename = assets/presplash.png
+icon.filename = assets/icon.png
 
 # Gradle / build extras
 android.gradle_dependencies =
 android.enable_androidx = True
 
-# Release signing (set via env vars; do NOT hardcode)
-# android.keystore = %(GURUJEE_KEYSTORE)s
-# android.keystore_alias = %(GURUJEE_KEY_ALIAS)s
-# android.keystore_passwd = %(GURUJEE_KEYSTORE_PASS)s
-# android.keyalias_passwd = %(GURUJEE_KEY_PASS)s
-
 [buildozer]
-
-# Log verbosity (0=quiet, 1=normal, 2=verbose)
 log_level = 2
-
-# Warn only; do not fail on missing optional assets
 warn_on_root = 1

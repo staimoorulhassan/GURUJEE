@@ -1,6 +1,6 @@
 heartbeat:
-  ping_interval_seconds: 30
-  response_timeout_seconds: 5
+  ping_interval_seconds: 8      # 8s + 2s timeout = 10s worst-case detection (SC-007)
+  response_timeout_seconds: 2
   max_restart_attempts: 10
 
 memory:

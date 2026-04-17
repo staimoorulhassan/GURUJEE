@@ -23,7 +23,7 @@ from cryptography.hazmat.primitives import hashes
 
 _NONCE_SIZE = 12
 _TAG_SIZE = 16
-_PBKDF2_ITERATIONS = 480_000
+_PBKDF2_ITERATIONS = 260_000  # reduced from 480k after ARM64 benchmarking (see config/security.yaml)
 _KEY_LEN = 32
 _LOCKOUT_BASE_SECONDS = 30
 _MAX_ATTEMPTS_BEFORE_LOCKOUT = 3
