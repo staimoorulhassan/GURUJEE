@@ -1,0 +1,22 @@
+{
+  "env": {
+    "PYTHONHOME": "",
+    "PYTHONPATH": ""
+  },
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:agentfactory.panaversity.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:nightly.link)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(python:*)",
+      "Bash(pytest:*)",
+      "Bash(adb:*)",
+      "Read(src/**)",
+      "Read(tests/**)"
+    ]
+  }
+}
