@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from gurujee.agents.base_agent import BaseAgent, Message, MessageBus, MessageType
+from gurujee.config.loader import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +19,10 @@ _PONG_TIMEOUT = 2.0    # seconds to wait for pongs after broadcast
 
 
 class HeartbeatAgent(BaseAgent):
-    """Broadcasts HEARTBEAT_PING every 8 s and signals the gateway if an agent fails to pong.
+    """Broadcasts HEARTBEAT_PING every *ping_interval* s; signals the gateway if an agent fails to pong.
 
-    Worst-case detection = 8s (ping interval) + 2s (pong timeout) = 10s, satisfying SC-007.
+    Default: 8s + 2s = 10s worst-case detection (SC-007). Overridden by
+    config/agents.yaml heartbeat.ping_interval_seconds / response_timeout_seconds.
     """
 
     def __init__(
@@ -42,6 +44,17 @@ class HeartbeatAgent(BaseAgent):
                 os.environ.get("GURUJEE_DATA_DIR", "data")
             )
             self._log_path = data / "heartbeat.log"
+
+        # Load intervals from agents.yaml if not explicitly overridden by caller.
+        if ping_interval == _PING_INTERVAL and pong_timeout == _PONG_TIMEOUT:
+            try:
+                config_dir = Path(os.environ.get("GURUJEE_CONFIG_DIR", "config"))
+                agents_cfg = ConfigLoader.load_yaml(config_dir / "agents.yaml")
+                hb = agents_cfg.get("heartbeat", {})
+                ping_interval = float(hb.get("ping_interval_seconds", _PING_INTERVAL))
+                pong_timeout = float(hb.get("response_timeout_seconds", _PONG_TIMEOUT))
+            except (FileNotFoundError, OSError, ValueError, KeyError):
+                pass  # fall back to module-level defaults
 
         self._ping_interval = ping_interval
         self._pong_timeout = pong_timeout

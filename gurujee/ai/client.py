@@ -11,9 +11,12 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncGenerator, Optional
 from urllib.parse import urlparse
+
+import yaml
 
 import httpx
 from openai import AsyncOpenAI
@@ -118,6 +121,8 @@ class AIClient:
         self._client: Optional[AsyncOpenAI] = None
         # In-memory auth profile cooldown states: provider_key -> state
         self._profile_states: dict[str, _ProfileState] = {}
+        # Hosts temporarily permitted for this session via allow_once policy.
+        self._session_allowed_hosts: set[str] = set()
 
     # ------------------------------------------------------------------ #
     # Public interface                                                      #
@@ -429,21 +434,30 @@ class AIClient:
         """
         hosts: set[str] = set(_SECURITY_ANCHOR_HOSTS)
 
-        # Load security anchors from config/security.yaml
+        # Load security anchors and user-approved hosts from config/security.yaml.
+        _sec_log_file: Optional[str] = None
         try:
             security_cfg_path = self._models_config_path.parent / "security.yaml"
             if security_cfg_path.exists():
                 sec_cfg = ConfigLoader.load_yaml(security_cfg_path)
+                net = sec_cfg.get("network_allowlist", {})
                 anchors = (
-                    sec_cfg.get("network_allowlist", {}).get("security_anchors", [])
+                    net.get("security_anchors", [])
                     or sec_cfg.get("anchor_hosts", [])  # legacy key
                 )
                 for entry in anchors:
                     host = entry.get("host", "") if isinstance(entry, dict) else str(entry)
                     if host:
                         hosts.add(host)
-        except Exception:
-            pass
+                for h in net.get("user_approved_hosts", []):
+                    if isinstance(h, str) and h:
+                        hosts.add(h)
+                _sec_log_file = net.get("log_file")
+        except (FileNotFoundError, OSError, yaml.YAMLError, ValueError, KeyError) as exc:
+            logger.warning("AIClient: could not load security.yaml anchors: %s", exc)
+
+        # Hosts permitted for this session via allow_once policy.
+        hosts.update(self._session_allowed_hosts)
 
         # Load provider base_urls from models.yaml
         try:
@@ -455,30 +469,78 @@ class AIClient:
                         host = urlparse(base_url).hostname or ""
                         if host:
                             hosts.add(host)
-        except Exception:
-            pass
+        except (FileNotFoundError, OSError, yaml.YAMLError, ValueError, KeyError) as exc:
+            logger.warning("AIClient: could not load models.yaml providers: %s", exc)
 
         allowlist = frozenset(hosts)
         logger.debug("AIClient: allowlist built (%d hosts): %s", len(allowlist), sorted(allowlist))
+
+        # Log the built allowlist to security.log if configured.
+        if _sec_log_file:
+            self._append_security_log(
+                _sec_log_file,
+                f"ALLOWLIST_BUILT hosts={sorted(allowlist)}",
+            )
+
         return allowlist
 
     def _check_allowlist(self, url: str) -> None:
-        """
-        Enforce that the URL's hostname is present in the computed allowlist.
-        
-        Parameters:
-            url (str): The URL whose hostname will be checked against the client's allowlist.
-        
+        """Enforce the network allowlist, respecting the configured unknown_host_policy.
+
         Raises:
-            AllowlistViolation: If the URL's hostname is not contained in the computed allowlist.
+            AllowlistViolation: If the host is not permitted by policy.
         """
         host = urlparse(url).hostname or ""
         allowed = self._build_allowlist()
-        if host not in allowed:
-            raise AllowlistViolation(
-                f"Host '{host}' is not in the GURUJEE network allowlist. "
-                f"Allowed: {sorted(allowed)}"
+        if host in allowed:
+            return
+
+        # Load policy settings from security.yaml.
+        policy = "block"
+        log_blocked = False
+        sec_log_file: Optional[str] = None
+        try:
+            sec_path = self._models_config_path.parent / "security.yaml"
+            if sec_path.exists():
+                sec_cfg = ConfigLoader.load_yaml(sec_path)
+                net = sec_cfg.get("network_allowlist", {})
+                policy = net.get("unknown_host_policy", "block")
+                log_blocked = bool(net.get("log_blocked_requests", False))
+                sec_log_file = net.get("log_file")
+        except (FileNotFoundError, OSError, yaml.YAMLError, ValueError, KeyError) as exc:
+            logger.warning("AIClient: could not load security.yaml policy: %s", exc)
+
+        logger.warning(
+            "AIClient: allowlist violation host=%s url=%s policy=%s",
+            host, url, policy,
+        )
+        if log_blocked and sec_log_file:
+            self._append_security_log(
+                sec_log_file,
+                f"BLOCKED host={host} url={url} policy={policy}",
             )
+
+        if policy == "allow_once":
+            self._session_allowed_hosts.add(host)
+            logger.info("AIClient: allow_once — temporarily permitting host=%s for this session", host)
+            return
+
+        # policy == "block" or "prompt_user" (daemon cannot prompt interactively; fail closed)
+        raise AllowlistViolation(
+            f"Host '{host}' is not in the GURUJEE network allowlist. "
+            f"Allowed: {sorted(allowed)}"
+        )
+
+    def _append_security_log(self, log_file: str, message: str) -> None:
+        """Append a timestamped entry to the security log file."""
+        try:
+            path = Path(log_file)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(f"{ts} {message}\n")
+        except OSError as exc:
+            logger.warning("AIClient: could not write to security log %s: %s", log_file, exc)
 
     # ------------------------------------------------------------------ #
     # Internals — legacy client cache (used when _stream is mocked)         #

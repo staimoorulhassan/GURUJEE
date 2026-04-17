@@ -49,7 +49,7 @@ You need a free API key before running setup:
 3. Copy your API key
 4. The setup wizard will ask for it automatically
 
-You can also add it later via **Settings → AI Models → Pollinations**.
+You can also add it later via the Settings UI (coming in a future update).
 
 ---
 

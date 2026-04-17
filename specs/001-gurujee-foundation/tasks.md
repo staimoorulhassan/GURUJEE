@@ -107,7 +107,7 @@ contains "Ali".
 
 ---
 
-## Phase 5: User Story 4 — PWA Chat Interface (Priority: P1)
+## Phase 5: User Story 3 — PWA Chat Interface (Priority: P1)
 
 **Goal**: Non-technical user opens a WhatsApp-style chat interface in a WebView or browser.
 Messages stream token-by-token. Agent status visible in a subtle status bar. Works offline
@@ -134,7 +134,7 @@ response in chat bubbles. Disable network. Reload — PWA loads from service wor
 
 ---
 
-## Phase 6: User Story 3 — Device Control via Chat (Priority: P1)
+## Phase 6: User Story 4 — Device Control via Chat (Priority: P1)
 
 **Goal**: User says "open WhatsApp", "set volume to 50%", "turn WiFi off", "what are my
 notifications". GURUJEE executes via Shizuku shell commands and replies with results.
@@ -303,7 +303,7 @@ T055 T056 T057
 8. Phase 6: US4 — Automation (T043–T057) → "open WhatsApp" works
 9. Phase 7: US5 — Launcher APK (T058–T060) → truly zero-touch
 10. Phase 8: TUI (T061–T065) → developer tooling
-11. Phase 9: Polish (T066–T074) → production-ready
+11. Phase 9: Polish (T066–T075) → production-ready
 
 ### Parallel Team Strategy (3 developers after Phase 2)
 
@@ -334,8 +334,8 @@ After US3 complete:
 | Phase 6: US4 Automation | T043–T057 (15) | Device control |
 | Phase 7: US5 Launcher | T058–T060 (3) | Zero-touch |
 | Phase 8: TUI | T061–T065 (5) | Dev tool |
-| Phase 9: Polish | T066–T074 (9) | Hardening |
-| **Total** | **74 tasks** | |
+| Phase 9: Polish | T066–T075 (10) | Hardening |
+| **Total** | **75 tasks** | |
 
 **Parallelizable tasks**: 34 marked `[P]`
 **MVP scope** (US1+US2+US3): T001–T042 (42 tasks)

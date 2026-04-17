@@ -19,6 +19,9 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
+*.iml
+*.ipr
+*.iws
 launcher/bin/
 launcher/.buildozer/
 launcher/__pycache__/

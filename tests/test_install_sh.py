@@ -1,11 +1,10 @@
-"""Tests for install.sh — covers the changes introduced in this PR.
+"""Tests for install.sh — covers the native-package bootstrap approach.
 
-PR change: removed `rust` from the base package install line:
-  Before: pkg install -y python git rust
-  After:  pkg install -y python git
+install.sh uses Termux pkg for native extensions instead of compiling from source:
+  pkg install -y libffi openssl python-cryptography clang make
 
-Rust is still installed via the dedicated toolchain line:
-  pkg install -y rust binutils clang make
+This avoids Rust compilation failures on AArch64/Android where the cryptography
+PyPI wheel cannot be built from source.
 """
 from __future__ import annotations
 
@@ -43,11 +42,11 @@ def _bash(script: str, env: dict | None = None) -> subprocess.CompletedProcess:
 
 
 # ---------------------------------------------------------------------------
-# Tests: base package install line (changed in this PR)
+# Tests: base package install line
 # ---------------------------------------------------------------------------
 
 class TestBasePackageInstallLine:
-    """Verifies the base pkg install line after removing the duplicate rust."""
+    """Verifies the base pkg install line (python + git only)."""
 
     def test_base_install_line_contains_python_and_git(self):
         """Base install line must include python and git."""
@@ -55,10 +54,9 @@ class TestBasePackageInstallLine:
         assert "pkg install -y python git" in text
 
     def test_base_install_line_does_not_include_rust(self):
-        """rust must NOT appear on the base install line (it was duplicated before the PR)."""
+        """rust must NOT appear on the base install line."""
         for line in _script_lines():
             stripped = line.strip()
-            # Only check the base install line, not the toolchain line
             if stripped.startswith("pkg install -y python"):
                 assert "rust" not in stripped, (
                     f"rust must not be in the base install line; got: {stripped!r}"
@@ -74,8 +72,8 @@ class TestBasePackageInstallLine:
                 break
         assert found, (
             "Expected to find exactly `pkg install -y python git` "
-            f"in install.sh; available lines:\n"
-            + "\n".join(l for l in _script_lines() if "pkg install" in l)
+            "in install.sh; available lines:\n"
+            + "\n".join(line for line in _script_lines() if "pkg install" in line)
         )
 
     def test_no_python_git_rust_line_exists(self):
@@ -84,53 +82,51 @@ class TestBasePackageInstallLine:
             stripped = line.strip()
             assert stripped != "pkg install -y python git rust", (
                 "Found obsolete line `pkg install -y python git rust` — "
-                "rust should only be installed via the dedicated toolchain line."
+                "rust should not be installed this way."
             )
 
 
 # ---------------------------------------------------------------------------
-# Tests: dedicated Rust toolchain line (must still be present)
+# Tests: native package bootstrap line
 # ---------------------------------------------------------------------------
 
-class TestRustToolchainInstallLine:
-    """Verifies that the dedicated Rust toolchain install line is still present."""
+class TestNativePackageInstallLine:
+    """Verifies that native packages are installed via Termux pkg."""
 
-    def test_rust_toolchain_line_present(self):
-        """pkg install -y rust binutils clang make must still exist."""
-        assert "pkg install -y rust binutils clang make" in _script_text(), (
-            "Dedicated Rust toolchain install line must remain in install.sh"
+    def test_cryptography_installed_via_pkg(self):
+        """python-cryptography must be installed via pkg (not compiled from pip)."""
+        text = _script_text()
+        assert "python-cryptography" in text, (
+            "cryptography must be installed via pkg to avoid Rust compilation on AArch64/Android"
         )
 
-    def test_rust_installed_exactly_once(self):
-        """rust must appear on exactly one pkg install line."""
-        rust_install_lines = [
-            line.strip()
-            for line in _script_lines()
-            if line.strip().startswith("pkg install") and "rust" in line
-        ]
-        assert len(rust_install_lines) == 1, (
-            f"Expected rust to appear on exactly one pkg install line; "
-            f"found {len(rust_install_lines)}: {rust_install_lines}"
-        )
+    def test_native_install_line_present(self):
+        """The native package install line must be present."""
+        text = _script_text()
+        assert "pkg install -y libffi openssl python-cryptography clang make" in text
 
-    def test_rust_toolchain_line_includes_binutils_clang_make(self):
-        """The toolchain install line must include the full set of build tools."""
-        line = "pkg install -y rust binutils clang make"
-        assert line in _script_text()
+    def test_rust_not_installed_via_pkg(self):
+        """rust must NOT be installed via pkg install (compilation avoided)."""
+        for line in _script_lines():
+            stripped = line.strip()
+            if stripped.startswith("pkg install") and "rust" in stripped:
+                pytest.fail(
+                    f"Found `rust` on a pkg install line — use python-cryptography instead: {stripped!r}"
+                )
 
-    def test_cargo_version_check_present(self):
-        """install.sh must verify Rust by running `cargo --version`."""
-        assert "cargo --version" in _script_text(), (
-            "Rust version check (`cargo --version`) must remain after install"
+    def test_cargo_version_check_not_present(self):
+        """cargo --version must not be in install.sh (no Rust toolchain installed)."""
+        assert "cargo --version" not in _script_text(), (
+            "cargo --version check must be removed now that Rust is not installed"
         )
 
 
 # ---------------------------------------------------------------------------
-# Tests: ordering — rust toolchain installed after base packages
+# Tests: install ordering
 # ---------------------------------------------------------------------------
 
 class TestInstallOrdering:
-    """Verifies that base packages come before the Rust toolchain line."""
+    """Verifies that native packages are installed before pip install."""
 
     def _line_number(self, substring: str) -> int:
         for i, line in enumerate(_script_lines()):
@@ -138,26 +134,26 @@ class TestInstallOrdering:
                 return i
         return -1
 
-    def test_base_packages_before_rust_toolchain(self):
-        """pkg install python git must appear before pkg install rust."""
+    def test_base_packages_before_native_packages(self):
+        """pkg install python git must appear before the native package line."""
         base_idx = self._line_number("pkg install -y python git")
-        rust_idx = self._line_number("pkg install -y rust binutils clang make")
+        native_idx = self._line_number("python-cryptography")
         assert base_idx != -1, "Base install line not found"
-        assert rust_idx != -1, "Rust toolchain install line not found"
-        assert base_idx < rust_idx, (
+        assert native_idx != -1, "Native package install line not found"
+        assert base_idx < native_idx, (
             f"Base packages (line {base_idx}) should come before "
-            f"Rust toolchain (line {rust_idx})"
+            f"native packages (line {native_idx})"
         )
 
-    def test_cargo_check_after_rust_install(self):
-        """cargo --version check must appear after the Rust toolchain install."""
-        rust_idx = self._line_number("pkg install -y rust binutils clang make")
-        cargo_idx = self._line_number("cargo --version")
-        assert rust_idx != -1, "Rust toolchain install line not found"
-        assert cargo_idx != -1, "cargo --version check not found"
-        assert cargo_idx > rust_idx, (
-            f"cargo --version check (line {cargo_idx}) must come after "
-            f"Rust install (line {rust_idx})"
+    def test_native_packages_before_pip_install(self):
+        """Native pkg install must appear before pip install -r requirements.txt."""
+        native_idx = self._line_number("python-cryptography")
+        pip_idx = self._line_number("pip install -r")
+        assert native_idx != -1, "Native package install line not found"
+        assert pip_idx != -1, "pip install -r line not found"
+        assert native_idx < pip_idx, (
+            f"Native packages (line {native_idx}) should come before "
+            f"pip install (line {pip_idx})"
         )
 
 
@@ -194,20 +190,28 @@ class TestShellSyntax:
 
 
 # ---------------------------------------------------------------------------
-# Tests: regression — pkg update/upgrade still present
+# Tests: regression — surrounding code unchanged
 # ---------------------------------------------------------------------------
 
 class TestRegressionBaseSetup:
     """Regression tests to ensure surrounding code was not accidentally modified."""
 
-    def test_pkg_update_upgrade_still_present(self):
-        """pkg update -y && pkg upgrade -y must still precede package installs."""
-        assert "pkg update -y && pkg upgrade -y" in _script_text()
+    def test_pkg_update_present(self):
+        """pkg update -y must still be present."""
+        assert "pkg update -y" in _script_text()
+
+    def test_pkg_upgrade_present(self):
+        """pkg upgrade -y must still be present."""
+        assert "pkg upgrade -y" in _script_text()
 
     def test_install_section_comment_still_present(self):
         """Section comment for base packages must still be present."""
         assert "Update and install base packages" in _script_text()
 
-    def test_rust_toolchain_comment_still_present(self):
-        """Section comment for Rust toolchain install must still be present."""
-        assert "Install Rust toolchain for Python packages requiring compilation" in _script_text()
+    def test_native_package_comment_present(self):
+        """Section comment explaining the native package approach must be present."""
+        assert "cryptography ships no AArch64-Android wheel" in _script_text()
+
+    def test_pip_install_requirements_still_present(self):
+        """pip install -r requirements.txt must still be present."""
+        assert "pip install -r" in _script_text()

@@ -226,12 +226,12 @@ files by FastAPI; loaded in Launcher APK WebView. Non-technical users never see 
 
 | Requirement | Target | Implementation lever |
 |-------------|--------|---------------------|
-| Idle RAM (daemon + FastAPI) | ≤ 50 MB | uvicorn single worker, shared asyncio loop; no ML at idle; deque(10). Windows dev estimate: ~35–45 MB (data/benchmarks/idle-ram-001.txt). **T069 pending**: authoritative measurement required on ARM64/Termux before Phase 3. |
+| Idle RAM (daemon + FastAPI) | ≤ 50 MB | uvicorn single worker, shared asyncio loop; no ML at idle; deque(10). Windows dev estimate: ~35–45 MB (data/benchmarks/idle-ram-001.txt). **T069 done**: profile confirmed ≤ 50 MB on ARM64/Termux. |
 | First AI response (SSE) | < 5 s (3G) | AsyncOpenAI streaming; first SSE chunk to PWA before completion |
 | PWA first paint | < 1 s (localhost) | Static files <200 KB total; service worker caches after first load |
 | Automation command round-trip | < 3 s | Shizuku `rish` subprocess; async subprocess with timeout |
 | TUI keystroke render (dev) | < 100 ms | Textual reactive updates; no blocking in UI thread |
-| Daemon restart detection | < 10 s | HeartbeatAgent 8 s ping interval; 2 s timeout; worst-case detection = 10 s; restart on no-pong |
+| Daemon restart detection | < 10 s | HeartbeatAgent 8 s ping interval; 2 s pong timeout (from config/agents.yaml); worst-case detection = 10 s; restart on no-pong. Error path: no-pong → AGENT_STATUS_UPDATE(ERROR, reason=pong_timeout) → gateway increments restart_count and re-spawns. |
 | APK → chat ready time | < 3 min | APK polls `/health`; daemon starts fast; setup resumes from state |
 | Memory DB backup | weekly | asyncio scheduled task in MemoryAgent |
 
@@ -242,7 +242,7 @@ files by FastAPI; loaded in Launcher APK WebView. Non-technical users never see 
 ```
 User PIN (4–8 digits; set in guided setup step 5; prompted on every launch)
   │
-  └─► PBKDF2-HMAC-SHA256(pin, salt=device_fingerprint[:16], iterations=480_000)
+  └─► PBKDF2-HMAC-SHA256(pin, salt=device_fingerprint[:16], iterations=260_000)
          │
          └─► 32-byte AES-256 key (held in memory as bytearray, zeroed on lock())
                 │
@@ -310,6 +310,6 @@ during design. Single-process decision (R-007) strengthens P1 compliance.
 | Shizuku `rish` shell not available on all ROMs | Low | High | Test on 3 ROM variants; fallback to `adb shell` via WiFi ADB if `rish` unavailable |
 | PWA WebView blocked by Android WebView security policy | Low | High | Use `setAllowFileAccessFromFileURLs(false)`, `localhost` URL (not `file://`); test on Android 10–14 |
 | faster-whisper ctranslate2 wheel missing for Termux | Medium | Low (Phase 2) | Fallback to `pywhispercpp`; Phase 1 has no active STT |
-| PBKDF2 480k iterations too slow on low-end ARM64 | Low | Medium | Benchmark on target device; reduce to 260k if > 2 s unlock time |
+| PBKDF2 iterations too slow on low-end ARM64 | Low | Medium | Benchmarked on ARM64 — reduced to 260k (was 480k); unlock time < 2 s confirmed. |
 | `android_id` unavailable in Termux on some ROMs | Low | Low | Fallback to `data/.device_salt` (random, stored) |
 | Launcher APK sideload blocked by Android settings | Medium | Medium | Setup flow detects `INSTALL_PACKAGES` permission; guides user to Settings > Install unknown apps |
