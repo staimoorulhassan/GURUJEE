@@ -30,13 +30,22 @@ from kivy.uix.progressbar import ProgressBar
 from kivy.uix.screenmanager import Screen, ScreenManager
 from kivy.uix.widget import Widget
 
-from bootstrap import (
-    copy_to_clipboard,
-    open_termux,
-    open_url,
-    poll_daemon_ready,
-    run_command_in_termux,
-)
+try:
+    from .bootstrap import (
+        copy_to_clipboard,
+        open_termux,
+        open_url,
+        poll_daemon_ready,
+        run_command_in_termux,
+    )
+except ImportError:
+    from bootstrap import (
+        copy_to_clipboard,
+        open_termux,
+        open_url,
+        poll_daemon_ready,
+        run_command_in_termux,
+    )
 
 _WEBVIEW_URL = "http://localhost:7171"
 _HEALTH_URL = "http://127.0.0.1:7171/health"

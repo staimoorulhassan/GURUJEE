@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=60.0", "wheel"]
+requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -22,6 +22,7 @@ dependencies = [
     "ruamel.yaml>=0.18.0",
     "tenacity>=8.2.0",
     "elevenlabs>=1.0.0",
+    # "faster-whisper>=1.0.0",  # Requires ctranslate2, not available in Termux
     #"openai-whisper>=1.0.0",
     "pytest>=7.4.0",
     "pytest-asyncio>=0.23.0",

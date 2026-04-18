@@ -31,8 +31,8 @@ pkg update -y
 pkg upgrade -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef"
 pkg install -y python git
 
-# Install native packages via Termux pkg to avoid compiling from source.
-# cryptography ships no AArch64-Android wheel on PyPI; use Termux's pre-built binary.
+# Install native packages via Termux pkg to ensure consistency and speed.
+# We pre-install python-cryptography to avoid slow compilation on some AArch64 devices.
 pkg install -y libffi openssl python-cryptography clang make
 
 # Clone or update repo

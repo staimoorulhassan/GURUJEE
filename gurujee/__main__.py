@@ -10,6 +10,10 @@ Usage:
   python -m gurujee --logs         # tail data/gateway.log
   python -m gurujee --restart      # restart daemon
   python -m gurujee --reset        # re-run guided setup (alias for --setup)
+  python -m gurujee --onboard      # interactive AI model/provider setup wizard
+  python -m gurujee config         # reconfigure AI model (no welcome screen)
+  python -m gurujee config --model # switch active model only (key unchanged)
+  python -m gurujee config --key   # update API key for current provider only
   python -m gurujee.setup          # guided setup wizard directly
 """
 from __future__ import annotations
@@ -41,6 +45,19 @@ def main() -> NoReturn:
     parser.add_argument("--logs", action="store_true", help="Tail data/gateway.log")
     parser.add_argument("--restart", action="store_true", help="Restart daemon")
     parser.add_argument("--reset", action="store_true", help="Re-run guided setup (alias for --setup)")
+    parser.add_argument("--onboard", action="store_true", help="Interactive AI model/provider setup wizard")
+    subparsers = parser.add_subparsers(dest="subcommand")
+    config_parser = subparsers.add_parser(
+        "config", help="Reconfigure AI model (same as --onboard without welcome screen)"
+    )
+    config_parser.add_argument(
+        "--model", action="store_true",
+        help="Reconfigure active model only (skip API key and alias steps)",
+    )
+    config_parser.add_argument(
+        "--key", action="store_true",
+        help="Update API key for the current provider only",
+    )
     args = parser.parse_args()
 
     _setup_logging()
@@ -48,6 +65,24 @@ def main() -> NoReturn:
     data_dir = Path(os.environ.get("GURUJEE_DATA_DIR", "data"))
     setup_state_path = data_dir / "setup_state.yaml"
     keystore_path = data_dir / "gurujee.keystore"
+
+    # gurujee config [--model | --key]  ─ reconfigure (no welcome screen)
+    if getattr(args, "subcommand", None) == "config":
+        from gurujee.setup.onboard import OnboardWizard
+        wizard = OnboardWizard(data_dir=data_dir, show_welcome=False)
+        if getattr(args, "model", False):
+            wizard.run_model_only()
+        elif getattr(args, "key", False):
+            wizard.run_key_only()
+        else:
+            wizard.run()
+        sys.exit(0)
+
+    # gurujee --onboard  ─ full model setup wizard with branding
+    if getattr(args, "onboard", False):
+        from gurujee.setup.onboard import OnboardWizard
+        OnboardWizard(data_dir=data_dir, show_welcome=True).run()
+        sys.exit(0)
 
     # --status: print agent status and exit
     if args.status:
@@ -68,11 +103,31 @@ def main() -> NoReturn:
         _restart_daemon(data_dir)
         sys.exit(0)
 
-    # --setup / --reset: run guided setup wizard.
-    # SKIP this check in headless mode — the daemon must start regardless of
-    # whether setup_state.yaml exists (e.g. Termux:Boot, nohup from install.sh).
+    # --setup / --reset / First-run auto-start:
     is_first_run = _is_first_run(setup_state_path)
-    if (is_first_run or args.setup or args.reset) and not headless_mode:
+
+    # 1. Explicit user intent conflict: Headless + Setup/Reset
+    if headless_mode and (args.setup or args.reset):
+        _console.print("[red]Error: Cannot run guided setup in --headless mode.[/red]")
+        _console.print("Run 'python -m gurujee --setup' interactively first.")
+        sys.exit(1)
+
+    # 2. Implicit auto-start check: Run wizard only if NOT headless
+    if is_first_run and not headless_mode:
+        from gurujee.setup.wizard import SetupWizard
+        SetupWizard(data_dir=data_dir).run()
+        sys.exit(0)
+    elif is_first_run and headless_mode:
+        logging.warning(
+            "GURUJEE: First run in headless mode. SetupWizard skipped. "
+            "Using default/fallback configs. Recommend running 'python -m gurujee --setup' "
+            "interactively or placing soul_identity.yaml and user_config.yaml in %s "
+            "before Termux:Boot starts.",
+            data_dir
+        )
+
+    # 3. Explicit setup/reset (now guaranteed NOT headless due to #1)
+    if args.setup or args.reset:
         from gurujee.setup.wizard import SetupWizard
         SetupWizard(data_dir=data_dir).run()
         sys.exit(0)

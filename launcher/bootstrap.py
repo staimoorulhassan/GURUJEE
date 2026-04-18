@@ -10,10 +10,13 @@ Provides only what the 4-screen onboarding flow actually needs:
 """
 from __future__ import annotations
 
+import logging
 import subprocess
 import time
 import urllib.request
 from typing import Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 
 _HEALTH_URL = "http://127.0.0.1:7171/health"
@@ -164,8 +167,8 @@ def copy_to_clipboard(text: str) -> bool:
                 cm = activity.getSystemService("clipboard")
                 clip = ClipData.newPlainText("GURUJEE", text)
                 cm.setPrimaryClip(clip)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error("Failed to copy to clipboard: %s", e)
 
         Clock.schedule_once(_copy, 0)
         return True

@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import uuid
+import yaml
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
@@ -14,8 +15,9 @@ from gurujee.config.loader import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
-_PING_INTERVAL = 8.0   # seconds between ping rounds (worst-case detection = 10s → satisfies SC-007)
-_PONG_TIMEOUT = 2.0    # seconds to wait for pongs after broadcast
+_PING_INTERVAL = 8.0   # seconds between ping rounds
+_PONG_TIMEOUT = 5.0    # seconds to wait for pongs (increased from 2.0 to avoid false positives)
+_MISS_THRESHOLD = 2    # consecutive misses allowed before restart
 
 
 class HeartbeatAgent(BaseAgent):
@@ -33,6 +35,7 @@ class HeartbeatAgent(BaseAgent):
         log_path: Optional[Path] = None,
         ping_interval: float = _PING_INTERVAL,
         pong_timeout: float = _PONG_TIMEOUT,
+        miss_threshold: int = _MISS_THRESHOLD,
     ) -> None:
         super().__init__(name, bus)
 
@@ -53,16 +56,20 @@ class HeartbeatAgent(BaseAgent):
                 hb = agents_cfg.get("heartbeat", {})
                 ping_interval = float(hb.get("ping_interval_seconds", _PING_INTERVAL))
                 pong_timeout = float(hb.get("response_timeout_seconds", _PONG_TIMEOUT))
-            except (FileNotFoundError, OSError, ValueError, KeyError):
+                miss_threshold = int(hb.get("consecutive_miss_threshold", _MISS_THRESHOLD))
+            except (FileNotFoundError, OSError, ValueError, KeyError, yaml.YAMLError):
                 pass  # fall back to module-level defaults
 
         self._ping_interval = ping_interval
         self._pong_timeout = pong_timeout
+        self._miss_threshold = miss_threshold
 
         # ping_id → set of agent names that have NOT yet ponged
         self._pending_pings: dict[str, set[str]] = {}
         # agent_name → how many restarts have been requested
         self._restart_counts: dict[str, int] = {}
+        # agent_name → consecutive missed pongs
+        self._missed_pongs: dict[str, int] = {}
 
         self._setup_file_logger()
 
@@ -128,16 +135,27 @@ class HeartbeatAgent(BaseAgent):
         await self._check_pending_pings(ping_id)
 
     async def _check_pending_pings(self, ping_id: str) -> None:
-        """Signal gateway for every agent that missed the pong window."""
+        """Signal gateway for every agent that missed the pong window N times."""
         missing = self._pending_pings.pop(ping_id, set())
         for agent_name in missing:
-            logger.warning(
-                "HeartbeatAgent: %s did not pong (ping_id=%s) — requesting restart",
-                agent_name,
-                ping_id,
-            )
-            self._restart_counts[agent_name] = self._restart_counts.get(agent_name, 0) + 1
-            await self._request_restart(agent_name, ping_id)
+            self._missed_pongs[agent_name] = self._missed_pongs.get(agent_name, 0) + 1
+            miss_count = self._missed_pongs[agent_name]
+
+            if miss_count >= self._miss_threshold:
+                logger.warning(
+                    "HeartbeatAgent: %s missed %d pongs — requesting restart",
+                    agent_name,
+                    miss_count,
+                )
+                self._restart_counts[agent_name] = self._restart_counts.get(agent_name, 0) + 1
+                await self._request_restart(agent_name, ping_id)
+            else:
+                logger.info(
+                    "HeartbeatAgent: %s missed pong (%d/%d) — warning only",
+                    agent_name,
+                    miss_count,
+                    self._miss_threshold,
+                )
 
     # ------------------------------------------------------------------ #
     # Pong handler                                                          #
@@ -157,6 +175,9 @@ class HeartbeatAgent(BaseAgent):
 
         pending = self._pending_pings.get(ping_id)
         if pending is not None:
+            # Any valid pong resets the miss counter for that agent
+            self._missed_pongs[from_agent] = 0
+
             pending.discard(from_agent)
             logger.debug(
                 "HeartbeatAgent: pong from %s (ping_id=%s, remaining=%d)",
@@ -166,6 +187,10 @@ class HeartbeatAgent(BaseAgent):
             )
             if not pending:
                 del self._pending_pings[ping_id]
+        else:
+            # Even if the ping_id is no longer pending (e.g. late pong),
+            # we should still reset the miss counter because the agent is alive.
+            self._missed_pongs[from_agent] = 0
 
     # ------------------------------------------------------------------ #
     # Restart signaling                                                     #

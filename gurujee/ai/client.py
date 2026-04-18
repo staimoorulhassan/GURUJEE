@@ -123,6 +123,7 @@ class AIClient:
         self._profile_states: dict[str, _ProfileState] = {}
         # Hosts temporarily permitted for this session via allow_once policy.
         self._session_allowed_hosts: set[str] = set()
+        self._cached_allowlist: Optional[frozenset[str]] = None
 
     # ------------------------------------------------------------------ #
     # Public interface                                                      #
@@ -432,6 +433,11 @@ class AIClient:
         2. base_url hostnames from all builtin_providers + custom_providers in models.yaml.
         3. Hardcoded _SECURITY_ANCHOR_HOSTS fallback if security.yaml is unreadable.
         """
+        if self._cached_allowlist is not None:
+            # Check if session hosts were added since cache was built.
+            if self._session_allowed_hosts.issubset(self._cached_allowlist):
+                return self._cached_allowlist
+
         hosts: set[str] = set(_SECURITY_ANCHOR_HOSTS)
 
         # Load security anchors and user-approved hosts from config/security.yaml.
@@ -482,6 +488,7 @@ class AIClient:
                 f"ALLOWLIST_BUILT hosts={sorted(allowlist)}",
             )
 
+        self._cached_allowlist = allowlist
         return allowlist
 
     def _check_allowlist(self, url: str) -> None:
@@ -510,6 +517,16 @@ class AIClient:
         except (FileNotFoundError, OSError, yaml.YAMLError, ValueError, KeyError) as exc:
             logger.warning("AIClient: could not load security.yaml policy: %s", exc)
 
+        if policy == "allow_once":
+            self._session_allowed_hosts.add(host)
+            logger.info("AIClient: allow_once — temporarily permitting host=%s for this session", host)
+            if log_blocked and sec_log_file:
+                self._append_security_log(
+                    sec_log_file,
+                    f"ALLOW_ONCE host={host} url={url}",
+                )
+            return
+
         logger.warning(
             "AIClient: allowlist violation host=%s url=%s policy=%s",
             host, url, policy,
@@ -519,11 +536,6 @@ class AIClient:
                 sec_log_file,
                 f"BLOCKED host={host} url={url} policy={policy}",
             )
-
-        if policy == "allow_once":
-            self._session_allowed_hosts.add(host)
-            logger.info("AIClient: allow_once — temporarily permitting host=%s for this session", host)
-            return
 
         # policy == "block" or "prompt_user" (daemon cannot prompt interactively; fail closed)
         raise AllowlistViolation(

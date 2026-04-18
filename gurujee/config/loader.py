@@ -143,6 +143,36 @@ class ConfigLoader:
             ConfigLoader.save_yaml(dict(_DEFAULT_USER_CONFIG), resolved)
 
     # ------------------------------------------------------------------ #
+    # data/gurujee.config.json (JSON — user-facing, manually editable)     #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def load_json_config(path: Path) -> dict[str, Any]:
+        """Load data/gurujee.config.json with defaults for missing keys."""
+        from gurujee.config.json_config import load_json_config
+        return load_json_config(path)
+
+    @staticmethod
+    def save_json_config(data: dict[str, Any], path: Path) -> None:
+        """Write data/gurujee.config.json atomically."""
+        from gurujee.config.json_config import save_json_config
+        save_json_config(data, path)
+
+    @staticmethod
+    def load_merged_config(data_dir: Path) -> dict[str, Any]:
+        """Return user_config.yaml merged with gurujee.config.json (JSON wins).
+
+        Suitable for callers that need the richer JSON fields (alias,
+        context_size, base_url) alongside the standard user_config keys.
+        AIClient continues reading user_config.yaml directly — no change needed.
+        """
+        from gurujee.config.json_config import merge_yaml_and_json
+        data_dir = Path(data_dir)
+        yaml_cfg = ConfigLoader.load_user_config(data_dir / "user_config.yaml")
+        json_cfg = ConfigLoader.load_json_config(data_dir / "gurujee.config.json")
+        return merge_yaml_and_json(yaml_cfg, json_cfg)
+
+    # ------------------------------------------------------------------ #
     # Helpers                                                               #
     # ------------------------------------------------------------------ #
 

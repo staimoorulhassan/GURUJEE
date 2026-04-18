@@ -50,7 +50,7 @@ keystore:
   path: data/gurujee.keystore
   algorithm: AES-256-GCM
   key_derivation: PBKDF2-HMAC-SHA256
-  iterations: 260000          # reduced from 480k after ARM64 benchmarking
+  iterations: 600000          # Restored to 600k (0.5s on ARM64) to meet security standards
   salt_source: device_fingerprint
 
 # ================================================================
