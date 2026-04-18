@@ -14,9 +14,9 @@ description: "Task list for GURUJEE Foundation — Phase 1 (v3: PWA + Automation
 - **US2** — Conversational AI Companion with Persistent Memory (Priority: P1) 🎯 Core Value
 
 **New architecture components (2026-04-12 decisions)**:
-- **US3** — FastAPI Server + PWA Chat UI (Priority: P1) — non-technical user interface
-- **US4** — Shizuku Device Automation (Priority: P1) — OpenClaw-equivalent device control
-- **US5** — Launcher APK (Priority: P1) — zero-touch setup for non-technical users
+- **US3** — Device Control via Chat (Priority: P1) — OpenClaw-equivalent device control
+- **US4** — FastAPI Server + PWA Chat UI (Priority: P1) — non-technical user interface
+- **US5** — Background Daemon Auto-Start (Launcher APK) (Priority: P1) — zero-touch setup for non-technical users
 
 **Tests**: Included per spec FR requirements and constitution P10 (70% coverage target).
 
@@ -107,7 +107,7 @@ contains "Ali".
 
 ---
 
-## Phase 5: User Story 3 — PWA Chat Interface (Priority: P1)
+## Phase 5: User Story 4 — PWA Chat Interface (Priority: P1)
 
 **Goal**: Non-technical user opens a WhatsApp-style chat interface in a WebView or browser.
 Messages stream token-by-token. Agent status visible in a subtle status bar. Works offline
@@ -116,25 +116,25 @@ after first load via service worker.
 **Independent Test**: Open `http://localhost:7171` in Chrome. Type a message. See streaming
 response in chat bubbles. Disable network. Reload — PWA loads from service worker cache.
 
-### Implementation for User Story 3
+### Implementation for User Story 4
 
-- [X] T032 [US3] Implement `gurujee/server/app.py` — `create_app(gateway: GatewayDaemon) → FastAPI`: creates FastAPI instance, mounts `StaticFiles` at `/static` pointing to `gurujee/server/static/`, registers all routers (chat, agents, automate, notifications, health), registers WebSocket endpoint `/ws`, sets CORS to `127.0.0.1` only, configures `uvicorn.Config(app, host="127.0.0.1", port=7171, loop="asyncio", workers=1)` and starts `Server.serve()` as asyncio task from `GatewayDaemon`
-- [X] T033 [US3] Implement `gurujee/server/routers/chat.py` — `POST /chat`: accepts `{"message": str}`, publishes `CHAT_REQUEST` to MessageBus, subscribes to `CHAT_STREAM_CHUNK` and `CHAT_RESPONSE` replies, streams via `StreamingResponse(media_type="text/event-stream")`; chunk format: `data: {"chunk": "...", "done": false}\n\n`; final: `data: {"chunk": "", "done": true}\n\n`; error: `data: {"error": "...", "done": true}\n\n`; **interrupted-stream**: on network drop, client disconnect, or LLM error mid-stream, publish `CHAT_RESPONSE` on the bus with `payload.metadata.interrupted = True`; MemoryAgent persists partial content to `data/memory.db` with `[interrupted]` suffix appended; PWA renders partial text with ⚠ interrupted indicator
-- [X] T034 [US3] Implement `gurujee/server/routers/health.py` — `GET /health`: returns `{"status": "ready", "agents": {name: status}}` when GatewayDaemon is fully started; `{"status": "starting"}` during startup; used by Launcher APK to poll readiness
-- [X] T035 [US3] Implement `gurujee/server/routers/agents.py` — `GET /agents`: returns snapshot of all `AgentState` entries from `GatewayDaemon.agent_states` as JSON list `[{"name": str, "status": str, "restart_count": int, "last_error": str|null}]`
-- [X] T036 [US3] Implement `gurujee/server/websocket.py` — `WebSocket /ws`: on connect registers client in `GatewayDaemon.ws_clients` set; on agent status change or automation result broadcasts JSON event to all connected clients; handles `ping`/`pong` keep-alive; removes client on disconnect
-- [X] T037 [US3] Write `gurujee/server/static/index.html` — PWA shell: `<meta name="viewport" content="width=device-width,initial-scale=1">`, dark background `#0a0a0a`, `<div id="status-bar">` (subtle top bar, 28px height), `<div id="chat-container">` (scrollable message list), `<div id="input-area">` (textarea + send button + voice button), `<link rel="manifest" href="manifest.json">`, service worker registration script, `<script src="app.js">`
-- [X] T038 [US3] Write `gurujee/server/static/style.css` — WhatsApp-style dark theme: background `#0a0a0a`, user message bubble `#1a1a2e` right-aligned, assistant bubble `#0d3b2e` left-aligned, automation result bubble `#1e1e3a` centre-aligned, amber accent `#f0a500`, orange `#ff6b00`, `font-family: system-ui`, bubble border-radius 18px, max-width 75%, status bar `background: #111`, mobile-first responsive, no external CSS imports
-- [X] T039 [US3] Write `gurujee/server/static/app.js` — chat logic: `sendMessage()` posts to `/chat` then reads SSE stream via `fetch` + `ReadableStream`; appends tokens to current assistant bubble in real time; shows blinking cursor `|` while streaming; removes cursor on `done: true`; shows `[interrupted]` suffix on error event; `connectWebSocket()` opens `/ws`, handles `agent_status` events to update status bar colour (green=all running, amber=degraded, red=critical); `loadHistory()` from localStorage on page load; no external JS libraries
-- [X] T040 [US3] Write `gurujee/server/static/sw.js` — service worker: `CACHE_NAME = "gurujee-v1"`; on `install`: cache `["/", "/app.js", "/style.css", "/manifest.json"]`; on `fetch`: cache-first for static assets (match by URL), network-first for `/chat`, `/agents`, `/ws` paths (pass through to network, no cache); `skipWaiting()` on activate
-- [X] T041 [US3] Write `gurujee/server/static/manifest.json` — `name: "GURUJEE"`, `short_name: "GURUJEE"`, `start_url: "/"`, `display: "standalone"`, `background_color: "#0a0a0a"`, `theme_color: "#f0a500"`, `icons: [{src:"icon-192.png", sizes:"192x192"}, {src:"icon-512.png", sizes:"512x512"}]`
-- [X] T042 [US3] Write `tests/test_server_chat.py` — use `httpx.AsyncClient(app=app, base_url="http://test")`; test: POST /chat streams SSE chunks in `data: {...}` format, `done:true` terminates stream, error response format on agent unavailable, GET /health returns `{"status":"ready"}` after daemon start, GET /agents returns list with 6 entries, WebSocket /ws receives agent_status event on mock status change
+- [X] T032 [US4] Implement `gurujee/server/app.py` — `create_app(gateway: GatewayDaemon) → FastAPI`: creates FastAPI instance, mounts `StaticFiles` at `/static` pointing to `gurujee/server/static/`, registers all routers (chat, agents, automate, notifications, health), registers WebSocket endpoint `/ws`, sets CORS to `127.0.0.1` only, configures `uvicorn.Config(app, host="127.0.0.1", port=7171, loop="asyncio", workers=1)` and starts `Server.serve()` as asyncio task from `GatewayDaemon`
+- [X] T033 [US4] Implement `gurujee/server/routers/chat.py` — `POST /chat`: accepts `{"message": str}`, publishes `CHAT_REQUEST` to MessageBus, subscribes to `CHAT_STREAM_CHUNK` and `CHAT_RESPONSE` replies, streams via `StreamingResponse(media_type="text/event-stream")`; chunk format: `data: {"chunk": "...", "done": false}\n\n`; final: `data: {"chunk": "", "done": true}\n\n`; error: `data: {"error": "...", "done": true}\n\n`; **interrupted-stream**: on network drop, client disconnect, or LLM error mid-stream, publish `CHAT_RESPONSE` on the bus with `payload.metadata.interrupted = True`; MemoryAgent persists partial content to `data/memory.db` with `[interrupted]` suffix appended; PWA renders partial text with ⚠ interrupted indicator
+- [X] T034 [US4] Implement `gurujee/server/routers/health.py` — `GET /health`: returns `{"status": "ready", "agents": {name: status}}` when GatewayDaemon is fully started; `{"status": "starting"}` during startup; used by Launcher APK to poll readiness
+- [X] T035 [US4] Implement `gurujee/server/routers/agents.py` — `GET /agents`: returns snapshot of all `AgentState` entries from `GatewayDaemon.agent_states` as JSON list `[{"name": str, "status": str, "restart_count": int, "last_error": str|null}]`
+- [X] T036 [US4] Implement `gurujee/server/websocket.py` — `WebSocket /ws`: on connect registers client in `GatewayDaemon.ws_clients` set; on agent status change or automation result broadcasts JSON event to all connected clients; handles `ping`/`pong` keep-alive; removes client on disconnect
+- [X] T037 [US4] Write `gurujee/server/static/index.html` — PWA shell: `<meta name="viewport" content="width=device-width,initial-scale=1">`, dark background `#0a0a0a`, `<div id="status-bar">` (subtle top bar, 28px height), `<div id="chat-container">` (scrollable message list), `<div id="input-area">` (textarea + send button + voice button), `<link rel="manifest" href="manifest.json">`, service worker registration script, `<script src="app.js">`
+- [X] T038 [US4] Write `gurujee/server/static/style.css` — WhatsApp-style dark theme: background `#0a0a0a`, user message bubble `#1a1a2e` right-aligned, assistant bubble `#0d3b2e` left-aligned, automation result bubble `#1e1e3a` centre-aligned, amber accent `#f0a500`, orange `#ff6b00`, `font-family: system-ui`, bubble border-radius 18px, max-width 75%, status bar `background: #111`, mobile-first responsive, no external CSS imports
+- [X] T039 [US4] Write `gurujee/server/static/app.js` — chat logic: `sendMessage()` posts to `/chat` then reads SSE stream via `fetch` + `ReadableStream`; appends tokens to current assistant bubble in real time; shows blinking cursor `|` while streaming; removes cursor on `done: true`; shows `[interrupted]` suffix on error event; `connectWebSocket()` opens `/ws`, handles `agent_status` events to update status bar colour (green=all running, amber=degraded, red=critical); `loadHistory()` from localStorage on page load; no external JS libraries
+- [X] T040 [US4] Write `gurujee/server/static/sw.js` — service worker: `CACHE_NAME = "gurujee-v1"`; on `install`: cache `["/", "/app.js", "/style.css", "/manifest.json"]`; on `fetch`: cache-first for static assets (match by URL), network-first for `/chat`, `/agents`, `/ws` paths (pass through to network, no cache); `skipWaiting()` on activate
+- [X] T041 [US4] Write `gurujee/server/static/manifest.json` — `name: "GURUJEE"`, `short_name: "GURUJEE"`, `start_url: "/"`, `display: "standalone"`, `background_color: "#0a0a0a"`, `theme_color: "#f0a500"`, `icons: [{src:"icon-192.png", sizes:"192x192"}, {src:"icon-512.png", sizes:"512x512"}]`
+- [X] T042 [US4] Write `tests/test_server_chat.py` — use `httpx.AsyncClient(app=app, base_url="http://test")`; test: POST /chat streams SSE chunks in `data: {...}` format, `done:true` terminates stream, error response format on agent unavailable, GET /health returns `{"status":"ready"}` after daemon start, GET /agents returns list with 6 entries, WebSocket /ws receives agent_status event on mock status change
 
-**Checkpoint (US3)**: Open `http://localhost:7171` in browser. Send "Hello". See streaming chat bubbles. Refresh with network disabled — page loads from service worker. Status bar shows agents running.
+**Checkpoint (US4)**: Open `http://localhost:7171` in browser. Send "Hello". See streaming chat bubbles. Refresh with network disabled — page loads from service worker. Status bar shows agents running.
 
 ---
 
-## Phase 6: User Story 4 — Device Control via Chat (Priority: P1)
+## Phase 6: User Story 3 — Device Control via Chat (Priority: P1)
 
 **Goal**: User says "open WhatsApp", "set volume to 50%", "turn WiFi off", "what are my
 notifications". GURUJEE executes via Shizuku shell commands and replies with results.
@@ -143,29 +143,29 @@ notifications". GURUJEE executes via Shizuku shell commands and replies with res
 WhatsApp opens on device. Check `data/memory.db` `automation_log` has 1 row with `status: success`.
 Shizuku deactivated → friendly error in response, not a crash.
 
-### Implementation for User Story 4
+### Implementation for User Story 3
 
-- [X] T043 [US4] Implement `gurujee/automation/executor.py` — `ShizukuExecutor` class: `_rish_path` from `config/automation.yaml`; `execute(cmd: str, timeout: int) → tuple[str, str, int]` runs `rish -c "<cmd>"` via `asyncio.create_subprocess_shell`, captures stdout/stderr, enforces timeout (raises `AutomationTimeoutError`); `is_available() → bool` checks rish binary exists and Shizuku running; on unavailable raises `ShizukuUnavailableError` with user-friendly message and re-activation steps
-- [X] T044 [P] [US4] Implement `gurujee/automation/actions/apps.py` — `open_app(executor, package_name: str)`: runs `am start -n <package>/.MainActivity` with fallback to `am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000 <package>`; `list_running_apps(executor)`: `dumpsys activity | grep mResumedActivity`; `resolve_package(app_name: str) → str`: maps common names to packages (`whatsapp`, `chrome`, `camera`, `settings`, `clock`, `messages`, `youtube`) extensible via config
-- [X] T045 [P] [US4] Implement `gurujee/automation/actions/device.py` — `set_volume(executor, level: int)`: `media volume --set <level> --stream 3`; `get_volume(executor)`: `media volume --get --stream 3`; `set_wifi(executor, enabled: bool)`: `svc wifi enable/disable`; `set_bluetooth(executor, enabled: bool)`: `svc bluetooth enable/disable`; `set_flashlight(executor, enabled: bool)`: camera flash toggle via `cmd`; `set_brightness(executor, level: int)`: `settings put system screen_brightness <level>`
-- [X] T046 [P] [US4] Implement `gurujee/automation/actions/input.py` — `tap(executor, x: int, y: int)`: `input tap <x> <y>`; `swipe(executor, x1, y1, x2, y2, duration_ms=300)`: `input swipe`; `type_text(executor, text: str)`: `input text "<text>"` (escape special chars); `key_event(executor, keycode: int)`: `input keyevent <keycode>`; `press_back(executor)`: shortcut for keyevent 4
-- [X] T047 [P] [US4] Implement `gurujee/automation/actions/notifications.py` — `list_notifications(executor)`: `termux-notification-list` via subprocess (Termux:API, not Shizuku), parse JSON; `dismiss_notification(executor, notif_id)`: `termux-notification-remove <id>`; cache results in `notification_cache` table via `LongTermMemory.cache_notifications()`
-- [X] T048 [P] [US4] Implement `gurujee/automation/actions/system.py` — `take_screenshot(executor)`: `screencap -p <path>` via Shizuku, returns path; `get_running_apps(executor)`: `dumpsys activity | grep mFocusedApp`
-- [X] T049 [US4] Implement `gurujee/automation/tool_router.py` — `ToolRouter` class: defines OpenAI tool schemas for 5 categories (open_app, device_setting, ui_input, set_reminder, read_notifications) as `tools` list for AI function-calling; `route(tool_call_json: dict) → Coroutine` maps `function.name` to correct action function + executor; raises `AutomationError` for unknown tool name
-- [X] T050 [US4] Implement `gurujee/agents/automation_agent.py` — `AutomationAgent(BaseAgent)`: initialises `ShizukuExecutor` and `ToolRouter`; handles `AUTOMATE_REQUEST`: calls `ToolRouter.route(tool_call)`, records to `automation_log` (success/failed/timeout), publishes `AUTOMATE_RESULT` with outcome and duration_ms; on `ShizukuUnavailableError` publishes friendly error with re-activation instructions; prunes `automation_log` to 500 entries on startup
-- [X] T051 [US4] Implement `gurujee/server/routers/automate.py` — `POST /automate`: accepts `{"command": str}`, publishes `AUTOMATE_REQUEST` to AutomationAgent via MessageBus, awaits `AUTOMATE_RESULT` reply (timeout 15s), returns `{"success": bool, "result": str, "command_type": str, "duration_ms": int}`
-- [X] T052 [US4] Implement `gurujee/server/routers/notifications.py` — `GET /notifications`: reads latest 20 rows from `notification_cache`; `POST /notifications/refresh`: triggers `AUTOMATE_REQUEST` for notification fetch, returns fresh list
-- [X] T053 [US4] Update `gurujee/ai/client.py` — integrate `ToolRouter.tools` list into every `chat.completions.create()` call as `tools=` parameter; when AI returns `tool_calls` in stream chunk, emit as `AUTOMATE_REQUEST` message instead of text; handle parallel tool calls (up to 4 per response per ADR-001)
-- [X] T054 [US4] Update `gurujee/server/static/app.js` — handle `automate_result` WebSocket event: render automation result as system bubble with distinct colour `#1e1e3a`; on `shizuku_unavailable` error show banner with re-activation steps link; update status bar with automation state indicator
-- [X] T055 [US4] Write `tests/test_automation_agent.py` — mock `ShizukuExecutor`; test: AUTOMATE_REQUEST dispatched to correct action, success logged to automation_log, timeout → status=timeout in log, Shizuku unavailable → friendly error published, automation_log pruned to 500 on startup
-- [X] T056 [P] [US4] Write `tests/test_automation_actions.py` — mock executor; test each action: open_app resolves package + builds correct `am start` command, set_volume calls correct `media volume` command, tap/swipe produce correct `input` commands, list_notifications parses Termux:API JSON output
-- [X] T057 [P] [US4] Write `tests/test_server_automate.py` — POST /automate with mock AutomationAgent; test: success response format, timeout response, Shizuku unavailable response, GET /notifications returns cached rows, POST /notifications/refresh triggers refresh
+- [X] T043 [US3] Implement `gurujee/automation/executor.py` — `ShizukuExecutor` class: `_rish_path` from `config/automation.yaml`; `execute(cmd: str, timeout: int) → tuple[str, str, int]` runs `rish -c "<cmd>"` via `asyncio.create_subprocess_shell`, captures stdout/stderr, enforces timeout (raises `AutomationTimeoutError`); `is_available() → bool` checks rish binary exists and Shizuku running; on unavailable raises `ShizukuUnavailableError` with user-friendly message and re-activation steps
+- [X] T044 [P] [US3] Implement `gurujee/automation/actions/apps.py` — `open_app(executor, package_name: str)`: runs `am start -n <package>/.MainActivity` with fallback to `am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000 <package>`; `list_running_apps(executor)`: `dumpsys activity | grep mResumedActivity`; `resolve_package(app_name: str) → str`: maps common names to packages (`whatsapp`, `chrome`, `camera`, `settings`, `clock`, `messages`, `youtube`) extensible via config
+- [X] T045 [P] [US3] Implement `gurujee/automation/actions/device.py` — `set_volume(executor, level: int)`: `media volume --set <level> --stream 3`; `get_volume(executor)`: `media volume --get --stream 3`; `set_wifi(executor, enabled: bool)`: `svc wifi enable/disable`; `set_bluetooth(executor, enabled: bool)`: `svc bluetooth enable/disable`; `set_flashlight(executor, enabled: bool)`: camera flash toggle via `cmd`; `set_brightness(executor, level: int)`: `settings put system screen_brightness <level>`
+- [X] T046 [P] [US3] Implement `gurujee/automation/actions/input.py` — `tap(executor, x: int, y: int)`: `input tap <x> <y>`; `swipe(executor, x1, y1, x2, y2, duration_ms=300)`: `input swipe`; `type_text(executor, text: str)`: `input text "<text>"` (escape special chars); `key_event(executor, keycode: int)`: `input keyevent <keycode>`; `press_back(executor)`: shortcut for keyevent 4
+- [X] T047 [P] [US3] Implement `gurujee/automation/actions/notifications.py` — `list_notifications(executor)`: `termux-notification-list` via subprocess (Termux:API, not Shizuku), parse JSON; `dismiss_notification(executor, notif_id)`: `termux-notification-remove <id>`; cache results in `notification_cache` table via `LongTermMemory.cache_notifications()`
+- [X] T048 [P] [US3] Implement `gurujee/automation/actions/system.py` — `take_screenshot(executor)`: `screencap -p <path>` via Shizuku, returns path; `get_running_apps(executor)`: `dumpsys activity | grep mFocusedApp`
+- [X] T049 [US3] Implement `gurujee/automation/tool_router.py` — `ToolRouter` class: defines OpenAI tool schemas for 5 categories (open_app, device_setting, ui_input, set_reminder, read_notifications) as `tools` list for AI function-calling; `route(tool_call_json: dict) → Coroutine` maps `function.name` to correct action function + executor; raises `AutomationError` for unknown tool name
+- [X] T050 [US3] Implement `gurujee/agents/automation_agent.py` — `AutomationAgent(BaseAgent)`: initialises `ShizukuExecutor` and `ToolRouter`; handles `AUTOMATE_REQUEST`: calls `ToolRouter.route(tool_call)`, records to `automation_log` (success/failed/timeout), publishes `AUTOMATE_RESULT` with outcome and duration_ms; on `ShizukuUnavailableError` publishes friendly error with re-activation instructions; prunes `automation_log` to 500 entries on startup
+- [X] T051 [US3] Implement `gurujee/server/routers/automate.py` — `POST /automate`: accepts `{"command": str}`, publishes `AUTOMATE_REQUEST` to AutomationAgent via MessageBus, awaits `AUTOMATE_RESULT` reply (timeout 15s), returns `{"success": bool, "result": str, "command_type": str, "duration_ms": int}`
+- [X] T052 [US3] Implement `gurujee/server/routers/notifications.py` — `GET /notifications`: reads latest 20 rows from `notification_cache`; `POST /notifications/refresh`: triggers `AUTOMATE_REQUEST` for notification fetch, returns fresh list
+- [X] T053 [US3] Update `gurujee/ai/client.py` — integrate `ToolRouter.tools` list into every `chat.completions.create()` call as `tools=` parameter; when AI returns `tool_calls` in stream chunk, emit as `AUTOMATE_REQUEST` message instead of text; handle parallel tool calls (up to 4 per response per ADR-001)
+- [X] T054 [US3] Update `gurujee/server/static/app.js` — handle `automate_result` WebSocket event: render automation result as system bubble with distinct colour `#1e1e3a`; on `shizuku_unavailable` error show banner with re-activation steps link; update status bar with automation state indicator
+- [X] T055 [US3] Write `tests/test_automation_agent.py` — mock `ShizukuExecutor`; test: AUTOMATE_REQUEST dispatched to correct action, success logged to automation_log, timeout → status=timeout in log, Shizuku unavailable → friendly error published, automation_log pruned to 500 on startup
+- [X] T056 [P] [US3] Write `tests/test_automation_actions.py` — mock executor; test each action: open_app resolves package + builds correct `am start` command, set_volume calls correct `media volume` command, tap/swipe produce correct `input` commands, list_notifications parses Termux:API JSON output
+- [X] T057 [P] [US3] Write `tests/test_server_automate.py` — POST /automate with mock AutomationAgent; test: success response format, timeout response, Shizuku unavailable response, GET /notifications returns cached rows, POST /notifications/refresh triggers refresh
 
-**Checkpoint (US4)**: Shizuku active → `POST /automate {"command": "open WhatsApp"}` → WhatsApp opens. `GET /notifications` → notification list. `automation_log` table has entries. Shizuku deactivated → friendly error in PWA, daemon stays running.
+**Checkpoint (US3)**: Shizuku active → `POST /automate {"command": "open WhatsApp"}` → WhatsApp opens. `GET /notifications` → notification list. `automation_log` table has entries. Shizuku deactivated → friendly error in PWA, daemon stays running.
 
 ---
 
-## Phase 7: User Story 5 — Launcher APK (Priority: P1)
+## Phase 7: User Story 5 — Background Daemon Auto-Start (Launcher APK) (Priority: P1)
 
 **Goal**: Non-technical user taps GURUJEE.apk on a fresh Android device (no Termux pre-installed).
 Sees progress screen. Within 3 minutes, sees PWA chat UI in WebView. Sends a message.
@@ -227,10 +227,10 @@ Phase 1 (Setup — T001–T010)
   └─→ Phase 2 (Foundational — T011–T018) ← CRITICAL GATE
         └─→ Phase 3 (US1: Setup Wizard) — entry gate for daemon
               └─→ Phase 4 (US2: Agents + Memory) — core intelligence
-                    └─→ Phase 5 (US3: FastAPI + PWA) — user interface
-                          ├─→ Phase 6 (US4: Automation) — device control
+                    ├─→ Phase 6 (US3: Automation) — device control
+                    └─→ Phase 5 (US4: FastAPI + PWA) — user interface
                           ├─→ Phase 7 (US5: Launcher APK) — zero-touch
-                          └─→ Phase 8 (TUI) — dev tool (parallel with US4/US5)
+                          └─→ Phase 8 (TUI) — dev tool (parallel with US3/US5)
   All complete → Phase 9 (Polish)
 ```
 
@@ -294,14 +294,14 @@ T055 T056 T057
 2. Phase 2: Foundational (T011–T018) — **CRITICAL GATE**
 3. Phase 3: US1 — Setup Wizard (T019–T022)
 4. Phase 4: US2 — Agents + Memory (T023–T031)
-5. Phase 5: US3 — FastAPI + PWA (T032–T042)
+5. Phase 5: US4 — FastAPI + PWA (T032–T042)
 6. **STOP AND VALIDATE**: Open `localhost:7171`, send message, streaming works, stop/start daemon, memory recall works
 7. Non-technical users can now use GURUJEE via PWA
 
 ### Incremental Addition
 
-8. Phase 6: US4 — Automation (T043–T057) → "open WhatsApp" works
-9. Phase 7: US5 — Launcher APK (T058–T060) → truly zero-touch
+8. Phase 6: US3 — Automation (T043–T057) → "open WhatsApp" works
+9. Phase 7: US5 — Background Daemon Auto-Start (T058–T060) → truly zero-touch
 10. Phase 8: TUI (T061–T065) → developer tooling
 11. Phase 9: Polish (T066–T075) → production-ready
 
@@ -330,8 +330,8 @@ After US3 complete:
 | Phase 2: Foundational | T011–T018 (8) | Blocking gate |
 | Phase 3: US1 Setup | T019–T022 (4) | Entry gate |
 | Phase 4: US2 Memory/AI | T023–T031 (9) | Core value |
-| Phase 5: US3 PWA/Server | T032–T042 (11) | User interface |
-| Phase 6: US4 Automation | T043–T057 (15) | Device control |
+| Phase 5: US4 PWA/Server | T032–T042 (11) | User interface |
+| Phase 6: US3 Automation | T043–T057 (15) | Device control |
 | Phase 7: US5 Launcher | T058–T060 (3) | Zero-touch |
 | Phase 8: TUI | T061–T065 (5) | Dev tool |
 | Phase 9: Polish | T066–T075 (10) | Hardening |

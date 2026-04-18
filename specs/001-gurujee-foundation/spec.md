@@ -231,6 +231,7 @@ without any terminal interaction.
   Phase 3, but the warning is surfaced immediately.
 - What happens if the AI endpoint returns a malformed response or times out mid-conversation?
   GURUJEE surfaces a graceful error to the user and remains stable; the daemon does not crash.
+- What happens if the Pollinations API key is invalid or revoked? GURUJEE detects the 401/403 status, notifies the user that their key has expired or is invalid, and provides a prompt to enter a new key (which is then updated in the keystore).
 - What happens if the SQLite memory database (`data/memory.db`) is corrupted? GURUJEE starts
   with a fresh database and notifies the user, rather than crashing on launch. The corrupted
   file is renamed to `data/memory.db.corrupt.<timestamp>` for manual recovery.
@@ -268,8 +269,9 @@ without any terminal interaction.
   5. Set keystore PIN: the user chooses a 4–8 digit PIN. The PIN is never stored; it is the
      PBKDF2-HMAC-SHA256 input for keystore key derivation. The setup MUST display the
      "Forgot PIN" consequence (keystore wipe + re-run setup) at this step.
-  6. Configure AI model (selection written to `data/user_config.yaml`).
-  7. Voice sample recording (optional — skippable): GURUJEE MUST display a consent prompt
+  6. Configure AI model: select provider/model from `config/models.yaml`.
+  7. Pollinations API Key: prompt for and validate a free API key from https://auth.pollinations.ai. The key MUST be stored only in the encrypted keystore (FR-027) and MUST NOT be written to `data/user_config.yaml`. Validation consists of a `/models` or similar test call to the provider endpoint.
+  8. Voice sample recording (optional — skippable): GURUJEE MUST display a consent prompt
      stating what the recording is for, how long it will be retained, and that the user can
      delete it at any time. Recording MUST NOT begin until the user explicitly confirms.
      The 30-second sample is sent to ElevenLabs; the returned voice ID is stored in the
@@ -328,9 +330,7 @@ without any terminal interaction.
   `data/user_config.yaml` under the `active_model` key; the default is
   `pollinations/nova-fast` (`provider/model-id` format per P2 v1.2.0).
   No model ID MUST be hardcoded in logic.
-- **FR-014**: When the AI endpoint is unreachable, GURUJEE MUST display a clear error
-  message in the TUI chat panel, queue the pending request, and automatically resend it
-  when connectivity to the endpoint is restored — without requiring user action.
+- **FR-014**: When the AI endpoint is unreachable or returns an authentication error (401/403), GURUJEE MUST display a clear error message in the TUI chat panel. For 401/403 errors, the user MUST be prompted to re-enter their API key. For network errors, GURUJEE MUST queue the pending request and automatically resend it (up to 5 retries) when connectivity to the endpoint is restored — without requiring user action.
 
 **Device Automation via Chat (Phase 1)**
 
@@ -373,7 +373,7 @@ without any terminal interaction.
 
 **Security & Credentials**
 
-- **FR-019**: All secrets (ElevenLabs voice ID, SIP credentials when added in Phase 2) MUST
+- **FR-019**: All secrets (Pollinations API key, ElevenLabs voice ID, SIP credentials when added in Phase 2) MUST
   be stored exclusively in an AES-256-GCM encrypted keystore at `data/gurujee.keystore`.
 - **FR-020**: Credentials MUST never appear in source code, configuration files, or logs.
 - **FR-022**: The network allowlist MUST be built dynamically at daemon startup by reading
@@ -388,6 +388,7 @@ without any terminal interaction.
   30-second lockout with exponential backoff on subsequent failures. The PIN prompt MUST
   display a "Forgot PIN?" option that clearly states the consequence (keystore wipe + guided
   setup must be re-run to re-enter all credentials) before allowing the wipe to proceed.
+- **FR-027**: The Pollinations API key MUST be stored only in the encrypted keystore per FR-019/FR-020. During setup, it must be validated via a test request. If a key becomes invalid (401/403) mid-conversation, GURUJEE MUST pause the session and request a new key via the UI.
 
 ---
 
@@ -416,8 +417,8 @@ without any terminal interaction.
 - **SetupState**: YAML document at `data/setup_state.yaml` tracking completion of each
   guided-setup step for resumption after interruption. Fields:
   `packages: bool`, `shizuku: bool`, `accessibility_apk: bool`, `permissions: bool`,
-  `keystore_pin_set: bool`, `ai_model: bool`, `voice_sample: bool` (optional, skippable),
-  `daemons: bool`. Setup is not considered complete until `keystore_pin_set` is `true`.
+  `keystore_pin_set: bool`, `pollinations_key: bool`, `ai_model: bool`, `voice_sample: bool` (optional, skippable),
+  `daemons: bool`. Setup is not considered complete until `keystore_pin_set` and `pollinations_key` are `true`.
 - **AutomationAgent**: Always-on Phase 1 agent supervised by GatewayDaemon. Receives
   natural-language automation intents from the message bus, calls the AI backend to
   convert them to structured tool calls, and dispatches to `ToolRouter` for Shizuku

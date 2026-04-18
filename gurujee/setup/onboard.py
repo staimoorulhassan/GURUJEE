@@ -1,8 +1,10 @@
 """OpenClaw-style interactive onboarding wizard for GURUJEE.
 
 Entry points:
-  python -m gurujee --onboard   → OnboardWizard(show_welcome=True).run()
-  python -m gurujee config      → OnboardWizard(show_welcome=False).run()
+  python -m gurujee --onboard        → OnboardWizard(show_welcome=True).run()
+  python -m gurujee config           → OnboardWizard(show_welcome=False).run()
+  python -m gurujee config --model   → OnboardWizard(...).run_model_only()
+  python -m gurujee config --key     → OnboardWizard(...).run_key_only()
 
 Flow (8 steps):
   1. Welcome         — branded Rich Panel (skipped when show_welcome=False)
@@ -348,6 +350,120 @@ class OnboardWizard:
             "Run [bold cyan]gurujee[/bold cyan] to start your AI companion.\n"
             "Run [bold cyan]gurujee config[/bold cyan] any time to reconfigure."
         )
+        _console.print()
+
+    # ------------------------------------------------------------------ #
+    # Targeted reconfigure entry points                                     #
+    # ------------------------------------------------------------------ #
+
+    def run_model_only(self) -> None:
+        """Reconfigure active model only — skips API key and alias steps.
+
+        Useful for switching models without touching stored credentials:
+          gurujee config --model
+        """
+        self._data_dir.mkdir(parents=True, exist_ok=True)
+        _console.rule("[bold]Reconfigure model[/bold]")
+        _console.print("Switch your active AI model. Your stored API key is unchanged.\n")
+
+        providers = self._load_all_providers()
+        provider_key = self._step_provider_selection(providers)
+
+        base_url: str | None = None
+        if provider_key == _CUSTOM_PROVIDER:
+            base_url = self._step_custom_endpoint()
+            provider_cfg: dict[str, Any] = {
+                "label": base_url,
+                "base_url": base_url,
+                "auth_env": "CUSTOM_API_KEY",
+                "models": [],
+            }
+        else:
+            provider_cfg = providers[provider_key]
+
+        model_id = self._step_model_selection(provider_cfg)
+        context_size = self._step_context_size(provider_cfg, model_id)
+
+        # Save without touching keystore or alias
+        active_model = f"{provider_key}/{model_id}"
+        user_config_path = self._data_dir / "user_config.yaml"
+        ConfigLoader.save_user_config({"active_model": active_model}, user_config_path)
+        _console.print(f"[green]✓[/green] Active model updated to [cyan]{active_model}[/cyan]")
+
+        json_config_path = self._data_dir / "gurujee.config.json"
+        existing = ConfigLoader.load_json_config(json_config_path)
+        existing.setdefault("model", {})
+        existing["model"]["provider"] = provider_key
+        existing["model"]["model_id"] = model_id
+        existing["model"]["context_size"] = context_size
+        existing["model"]["base_url"] = base_url
+        ConfigLoader.save_json_config(existing, json_config_path)
+        _console.print(f"[green]✓[/green] Config updated at [cyan]{json_config_path}[/cyan]")
+        _console.print()
+
+    def run_key_only(self) -> None:
+        """Update the API key for the current provider — skips all other steps.
+
+        Reads the current provider from gurujee.config.json, prompts for
+        a new key, and saves it to the keystore:
+          gurujee config --key
+        """
+        self._data_dir.mkdir(parents=True, exist_ok=True)
+        _console.rule("[bold]Update API key[/bold]")
+
+        # Derive current provider from saved config
+        json_config_path = self._data_dir / "gurujee.config.json"
+        current = ConfigLoader.load_json_config(json_config_path)
+        provider_key: str = current.get("model", {}).get("provider", "")
+
+        if not provider_key or provider_key == _CUSTOM_PROVIDER:
+            _console.print(
+                "[yellow]No saved provider found. Running full reconfigure instead.[/yellow]\n"
+            )
+            self.run()
+            return
+
+        providers = self._load_all_providers()
+        provider_cfg = providers.get(provider_key, {})
+        auth_env: str | None = provider_cfg.get("auth_env")
+        label: str = provider_cfg.get("label", provider_key)
+
+        if not auth_env:
+            _console.print(
+                f"[yellow]Provider [bold]{label}[/bold] uses OAuth / no stored key. Nothing to update.[/yellow]"
+            )
+            return
+
+        _console.print(
+            f"Updating API key for [bold cyan]{label}[/bold cyan].\n"
+            f"Keystore entry: [dim]{auth_env}[/dim]\n"
+        )
+
+        auth_note: str = provider_cfg.get("auth_note", "")
+        auth_url: str = provider_cfg.get("auth_url", "")
+        if auth_url and not auth_note:
+            auth_note = f"Get your key at: {auth_url}"
+        if auth_note:
+            _console.print(f"[dim]{auth_note}[/dim]")
+
+        api_key = Prompt.ask(
+            f"New [bold]{label}[/bold] API key (press Enter to abort)",
+            password=True,
+            default="",
+        ).strip()
+
+        if not api_key:
+            _console.print("[yellow]Aborted — key unchanged.[/yellow]")
+            return
+
+        try:
+            ks = self._get_unlocked_keystore()
+            ks.set(auth_env, api_key)
+            ks.lock()
+            _console.print(f"[green]✓[/green] API key for [bold]{label}[/bold] updated in keystore.")
+        except Exception as exc:  # noqa: BLE001
+            _console.print(f"[red]Could not update keystore: {exc}[/red]")
+            return
         _console.print()
 
     # ------------------------------------------------------------------ #

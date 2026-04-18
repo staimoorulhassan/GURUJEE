@@ -10,17 +10,17 @@ Think of it as **OpenClaw for Android**.
 
 ## What GURUJEE Can Do
 
-| Capability | Description |
-|---|---|
-| 💬 **AI Chat** | Talk to GURUJEE via a WhatsApp-style app on your phone |
-| 🧠 **Persistent Memory** | It remembers what you told it last week |
-| 📞 **Auto-Answer Calls** | Answers calls in your cloned voice using AI |
-| 📱 **Phone Automation** | Open apps, send messages, control settings by voice or text |
-| 💌 **SMS Auto-Reply** | Replies to approved contacts automatically |
-| ⏰ **Smart Scheduling** | "Remind me every Monday at 9am" — it just works |
-| 🎭 **Soul & Identity** | Persistent personality that evolves with you |
-| 🔌 **40+ AI Providers** | Anthropic, OpenAI, Gemini, Ollama, Groq, and more |
-| 🔒 **Private by Default** | All data on your phone, all secrets encrypted |
+| Capability                | Description                                                 |
+|---------------------------|-------------------------------------------------------------|
+| 💬 **AI Chat**            | Talk to GURUJEE via a WhatsApp-style app on your phone      |
+| 🧠 **Persistent Memory**  | It remembers what you told it last week                     |
+| 📞 **Auto-Answer Calls**  | Answers calls in your cloned voice using AI                 |
+| 📱 **Phone Automation**   | Open apps, send messages, control settings by voice or text |
+| 💌 **SMS Auto-Reply**     | Replies to approved contacts automatically                  |
+| ⏰ **Smart Scheduling**    | "Remind me every Monday at 9am" — it just works             |
+| 🎭 **Soul & Identity**    | Persistent personality that evolves with you                |
+| 🔌 **40+ AI Providers**   | Anthropic, OpenAI, Gemini, Ollama, Groq, and more           |
+| 🔒 **Private by Default** | All data on your phone, all secrets encrypted               |
 
 ---
 
@@ -49,7 +49,7 @@ You need a free API key before running setup:
 3. Copy your API key
 4. The setup wizard will ask for it automatically
 
-You can also add it later via the Settings UI (coming in a future update).
+If you skip this step, you will need to re-run the setup wizard (`python -m gurujee --setup`) or manually edit `config/models.yaml` later. The in-app Settings UI is currently in development.
 
 ---
 
@@ -62,8 +62,8 @@ You can also add it later via the Settings UI (coming in a future update).
 curl -sL https://raw.githubusercontent.com/staimoorulhassan/GURUJEE/main/install.sh | bash
 ```
 
-3. Follow the guided setup — it handles everything automatically
-4. When done, tap the **GURUJEE** shortcut on your homescreen
+1. Follow the guided setup — it handles everything automatically
+2. When done, tap the **GURUJEE** shortcut on your homescreen
 
 ---
 
@@ -76,8 +76,8 @@ curl -sL https://raw.githubusercontent.com/staimoorulhassan/GURUJEE/main/install
 1. Go to [GitHub Releases](https://github.com/staimoorulhassan/GURUJEE/releases/latest)
 2. Download `gurujee-1.0.0-debug.apk`
 3. On your Android phone:
-   - Go to **Settings → Security → Install Unknown Apps**
-   - Allow your browser or file manager to install APKs
+    - Go to **Settings → Security → Install Unknown Apps**
+    - Allow your browser or file manager to install APKs
 4. Open the downloaded APK and tap **Install**
 5. Open **GURUJEE** from your app drawer
 6. The app will check for Termux and set everything up automatically
@@ -124,13 +124,13 @@ Shizuku gives GURUJEE the ability to control your phone without root. The setup 
 ### Step 4 — Permissions
 GURUJEE requests all required permissions in one batch via Shizuku:
 - Phone (make/receive calls)
-- SMS (read/send messages)  
+- SMS (read/send messages)
 - Contacts (look up names)
 - Microphone (voice input and calls)
 - Notifications (read and act on them)
 
 ### Step 5 — Set Your PIN
-GURUJEE uses a PIN to encrypt all your secrets (API keys, SIP password, voice clone). This PIN is never stored — it is used to derive your encryption key. 
+GURUJEE uses a PIN to encrypt all your secrets (API keys, SIP password, voice clone). This PIN is never stored — it is used to derive your encryption key.
 
 Choose a 4–8 digit PIN you will remember. If you forget it, you must re-run setup (credentials will need to be re-entered).
 
@@ -266,12 +266,12 @@ Or go to **Settings → AI Models → Primary Model**.
 ### Add a New Provider
 Go to **Settings → AI Models → Add Provider**:
 
-| Field | Example |
-|---|---|
-| Provider name | `My Groq` |
-| Base URL | `https://api.groq.com/openai/v1` |
-| API Key | `gsk_...` |
-| Model ID | `llama-3.3-70b-versatile` |
+| Field         | Example                          |
+|---------------|----------------------------------|
+| Provider name | `My Groq`                        |
+| Base URL      | `https://api.groq.com/openai/v1` |
+| API Key       | `gsk_...`                        |
+| Model ID      | `llama-3.3-70b-versatile`        |
 
 Tap **Test Connection** before saving.
 
@@ -296,17 +296,17 @@ Fallback 2: pollinations/gemini-fast  (free backup)
 
 ### Supported Providers (40+)
 
-| Category | Providers |
-|---|---|
-| **Free / No Key** | Pollinations (nova-fast, gemini-fast, gemini-search, openai-fast, grok, mistral) |
-| **Cloud Premium** | Anthropic (Claude), OpenAI (GPT), Google (Gemini), xAI (Grok), Mistral |
-| **Fast Inference** | Groq, Together AI, DeepSeek, Perplexity |
-| **Multi-Model Gateways** | OpenRouter, LiteLLM, Vercel AI Gateway, Kilo Gateway, Cloudflare AI |
-| **Local / Self-Hosted** | Ollama, vLLM, SGLang, LM Studio, ComfyUI |
-| **OAuth (Free)** | GitHub Copilot, OpenCode, Google Gemini CLI |
-| **China Providers** | Alibaba (Qwen), Volcengine (Doubao), Moonshot (Kimi), MiniMax, Qianfan |
-| **Privacy-Focused** | Venice AI, Chutes |
-| **Specialized** | NVIDIA NIM, Amazon Bedrock, Hugging Face, fal.ai, Runway, StepFun |
+| Category                 | Providers                                                                        |
+|--------------------------|----------------------------------------------------------------------------------|
+| **Free / No Key**        | Pollinations (nova-fast, gemini-fast, gemini-search, openai-fast, grok, mistral) |
+| **Cloud Premium**        | Anthropic (Claude), OpenAI (GPT), Google (Gemini), xAI (Grok), Mistral           |
+| **Fast Inference**       | Groq, Together AI, DeepSeek, Perplexity                                          |
+| **Multi-Model Gateways** | OpenRouter, LiteLLM, Vercel AI Gateway, Kilo Gateway, Cloudflare AI              |
+| **Local / Self-Hosted**  | Ollama, vLLM, SGLang, LM Studio, ComfyUI                                         |
+| **OAuth (Free)**         | GitHub Copilot, OpenCode, Google Gemini CLI                                      |
+| **China Providers**      | Alibaba (Qwen), Volcengine (Doubao), Moonshot (Kimi), MiniMax, Qianfan           |
+| **Privacy-Focused**      | Venice AI, Chutes                                                                |
+| **Specialized**          | NVIDIA NIM, Amazon Bedrock, Hugging Face, fal.ai, Runway, StepFun                |
 
 ---
 
@@ -376,15 +376,15 @@ The TUI shows live agent status, message bus traffic, raw logs, and direct agent
 
 **Keyboard shortcuts in TUI:**
 
-| Key | Action |
-|---|---|
-| `Tab` | Switch between panels |
-| `c` | Open chat panel |
-| `a` | Open agents panel |
-| `s` | Open settings panel |
-| `l` | View logs |
-| `q` | Quit TUI (daemon keeps running) |
-| `Ctrl+C` | Stop everything |
+| Key      | Action                          |
+|----------|---------------------------------|
+| `Tab`    | Switch between panels           |
+| `c`      | Open chat panel                 |
+| `a`      | Open agents panel               |
+| `s`      | Open settings panel             |
+| `l`      | View logs                       |
+| `q`      | Quit TUI (daemon keeps running) |
+| `Ctrl+C` | Stop everything                 |
 
 ---
 
@@ -457,15 +457,15 @@ Your memories, settings, and credentials are preserved across updates.
 
 ## Data & Privacy
 
-| Data | Where it lives | Leaves your phone? |
-|---|---|---|
-| Conversations & memories | `data/memory.db` (SQLite) | Never |
-| API keys & SIP password | `data/gurujee.keystore` (AES-256-GCM) | Never |
-| Voice clone sample | Deleted after upload | Sent once to ElevenLabs |
-| AI chat messages | Sent to your chosen AI provider | Yes (to provider only) |
-| Call audio | Processed locally by Whisper | Never |
-| SMS content | Sent to AI for reply generation | Yes (to provider only) |
-| Soul identity | `data/soul_identity.yaml` | Never |
+| Data                     | Where it lives                        | Leaves your phone?      |
+|--------------------------|---------------------------------------|-------------------------|
+| Conversations & memories | `data/memory.db` (SQLite)             | Never                   |
+| API keys & SIP password  | `data/gurujee.keystore` (AES-256-GCM) | Never                   |
+| Voice clone sample       | Deleted after upload                  | Sent once to ElevenLabs |
+| AI chat messages         | Sent to your chosen AI provider       | Yes (to provider only)  |
+| Call audio               | Processed locally by Whisper          | Never                   |
+| SMS content              | Sent to AI for reply generation       | Yes (to provider only)  |
+| Soul identity            | `data/soul_identity.yaml`             | Never                   |
 
 **Network connections GURUJEE makes:**
 - `gen.pollinations.ai` — AI inference (default provider)
@@ -500,11 +500,11 @@ gurujee/
 
 ## Phases
 
-| Phase | Status | Contents |
-|---|---|---|
-| **Phase 1 — Foundation** | ✅ Complete | Chat UI, soul/memory agents, device automation, PWA, auto-start, 40+ AI providers |
-| **Phase 2 — Comms** | 🔄 In Progress | SIP calling, voice clone, SMS auto-reply, cron scheduler |
-| **Phase 3 — Orchestration** | 📋 Planned | Sub-agents, advanced skills, plugin marketplace |
+| Phase                       | Status         | Contents                                                                          |
+|-----------------------------|----------------|-----------------------------------------------------------------------------------|
+| **Phase 1 — Foundation**    | ✅ Complete     | Chat UI, soul/memory agents, device automation, PWA, auto-start, 40+ AI providers |
+| **Phase 2 — Comms**         | 🔄 In Progress | SIP calling, voice clone, SMS auto-reply, cron scheduler                          |
+| **Phase 3 — Orchestration** | 📋 Planned     | Sub-agents, advanced skills, plugin marketplace                                   |
 
 ---
 

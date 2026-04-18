@@ -12,6 +12,8 @@ Usage:
   python -m gurujee --reset        # re-run guided setup (alias for --setup)
   python -m gurujee --onboard      # interactive AI model/provider setup wizard
   python -m gurujee config         # reconfigure AI model (no welcome screen)
+  python -m gurujee config --model # switch active model only (key unchanged)
+  python -m gurujee config --key   # update API key for current provider only
   python -m gurujee.setup          # guided setup wizard directly
 """
 from __future__ import annotations
@@ -45,7 +47,17 @@ def main() -> NoReturn:
     parser.add_argument("--reset", action="store_true", help="Re-run guided setup (alias for --setup)")
     parser.add_argument("--onboard", action="store_true", help="Interactive AI model/provider setup wizard")
     subparsers = parser.add_subparsers(dest="subcommand")
-    subparsers.add_parser("config", help="Reconfigure AI model (same as --onboard without welcome screen)")
+    config_parser = subparsers.add_parser(
+        "config", help="Reconfigure AI model (same as --onboard without welcome screen)"
+    )
+    config_parser.add_argument(
+        "--model", action="store_true",
+        help="Reconfigure active model only (skip API key and alias steps)",
+    )
+    config_parser.add_argument(
+        "--key", action="store_true",
+        help="Update API key for the current provider only",
+    )
     args = parser.parse_args()
 
     _setup_logging()
@@ -54,10 +66,16 @@ def main() -> NoReturn:
     setup_state_path = data_dir / "setup_state.yaml"
     keystore_path = data_dir / "gurujee.keystore"
 
-    # gurujee config  ─ reconfigure model (no welcome screen)
+    # gurujee config [--model | --key]  ─ reconfigure (no welcome screen)
     if getattr(args, "subcommand", None) == "config":
         from gurujee.setup.onboard import OnboardWizard
-        OnboardWizard(data_dir=data_dir, show_welcome=False).run()
+        wizard = OnboardWizard(data_dir=data_dir, show_welcome=False)
+        if getattr(args, "model", False):
+            wizard.run_model_only()
+        elif getattr(args, "key", False):
+            wizard.run_key_only()
+        else:
+            wizard.run()
         sys.exit(0)
 
     # gurujee --onboard  ─ full model setup wizard with branding
