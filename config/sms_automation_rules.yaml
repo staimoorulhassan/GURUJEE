@@ -1,0 +1,49 @@
+# SMS Automation Rules
+# Rules are evaluated in order; all matching rules' actions apply
+
+rules:
+  - id: rule-001
+    type: "sms"
+    trigger: "message"
+    conditions:
+      - keyword_any: ["reminder", "schedule", "calendar"]
+      - time_range: "09:00-17:00"  # Work hours
+    actions:
+      auto_reply: true
+      delay_seconds: 5
+      max_length: 160
+      fallback: "call_user"  # If AI fails, call user
+    enabled: true
+
+  - id: rule-002
+    type: "sms"
+    trigger: "message"
+    conditions:
+      - keyword_any: ["urgent", "emergency", "911"]
+    actions:
+      auto_reply: true
+      delay_seconds: 0  # Immediate
+      priority: "high"
+    enabled: true
+
+  - id: rule-003
+    type: "sms_blocklist"
+    trigger: "message"
+    conditions:
+      - contact_regex: ".*spam.*"
+      - keyword_any: ["unsubscribe", "promotional"]
+    actions:
+      discard: true
+      block_contact: false
+    enabled: true
+
+  - id: rule-004
+    type: "sms"
+    trigger: "message"
+    conditions:
+      - contact: "+1-555-123-4567"  # VIP contact
+    actions:
+      auto_reply: false
+      notify_user: true
+      priority: "high"
+    enabled: true

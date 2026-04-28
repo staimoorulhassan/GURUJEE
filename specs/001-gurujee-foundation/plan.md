@@ -57,7 +57,7 @@ integration via the openai SDK with streaming. The daemon targets ≤50 MB RAM a
 | **P4** Security First | ✅ PASS | AES-256-GCM keystore; PBKDF2-HMAC-SHA256 key derivation (R-004). Network allowlist enforced in `ai/client.py`. No secrets in config. Consent gate before voice sample (FR-001, US1-S5). |
 | **P5** Zero-Touch Setup | ✅ PASS | Launcher APK handles Termux install → bootstrap → daemon start → PWA load. User never sees terminal. `data/setup_state.yaml` persists progress. |
 | **P6** Python-First Stack | ✅ PASS | FastAPI/uvicorn + PWA (HTML/CSS/JS served by Python). No Node.js, no Electron, no JVM. FastAPI binds to 127.0.0.1 only (P4/P6 security). |
-| **P7** Agent Architecture Sacred | ✅ PASS | All 5 Phase-1 agents (soul, memory, heartbeat, user_agent, cron-dormant) implemented as asyncio Tasks. All comms via MessageBus/Queue. No direct inter-agent references (contracts/message-bus.md). |
+| **P7** Agent Architecture Sacred | ✅ PASS | All 6 Phase-1 agents (soul, memory, heartbeat, user_agent, cron, automation) implemented as asyncio Tasks. All comms via MessageBus/Queue. No direct inter-agent references (contracts/message-bus.md). |
 | **P8** Voice/SIP First-Class | ✅ PASS | ElevenLabs SDK installed Phase 1; voice sample + consent in FR-001 step 6. streaming=True enforced in `ai/client.py` (P1-compliant). |
 | **P9** Distribution | ✅ PASS | Launcher APK (GitHub Releases) is canonical non-technical path. `install.sh` retained as developer path. Both distribute Accessibility APK via GitHub Releases + SHA-256 check. |
 | **P10** Code Quality | ✅ PASS | All config files `.yaml` (PyYAML + ruamel.yaml per R-009). Type hints + docstrings enforced. RotatingFileHandler(5MB, 3 backups). `pathlib.Path` everywhere. pytest 70% target. |
@@ -226,7 +226,7 @@ files by FastAPI; loaded in Launcher APK WebView. Non-technical users never see 
 
 | Requirement | Target | Implementation lever |
 |-------------|--------|---------------------|
-| Idle RAM (daemon + FastAPI) | ≤ 50 MB | uvicorn single worker, shared asyncio loop; no ML at idle; deque(10). Windows dev estimate: ~35–45 MB (data/benchmarks/idle-ram-001.txt). **T069 done**: profile confirmed ≤ 50 MB on ARM64/Termux. |
+| Idle RAM (daemon + FastAPI) | ≤ 50 MB | uvicorn single worker, shared asyncio loop; no ML at idle; deque(10). **T069 PARTIAL**: Windows measurement 59.30 MB (data/benchmarks/idle-ram-001.txt). ARM64 Termux measurement required as Phase 2 pre-release gate. |
 | First AI response (SSE) | < 5 s (3G) | AsyncOpenAI streaming; first SSE chunk to PWA before completion |
 | PWA first paint | < 1 s (localhost) | Static files <200 KB total; service worker caches after first load |
 | Automation command round-trip | < 3 s | Shizuku `rish` subprocess; async subprocess with timeout |

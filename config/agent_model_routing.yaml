@@ -1,0 +1,49 @@
+# Agent model routing configuration
+# Defines default models, fallback chains, budget tiers per agent
+
+agent_defaults:
+  timeout_seconds: 30
+  max_retries: 2
+
+agents:
+  soul:
+    default_model: "anthropic/claude-opus-4-6"
+    fallback_models:
+      - "anthropic/claude-sonnet-4-6"
+    budget_tier: "premium"
+    cost_per_1m_tokens: 15.0
+
+  memory:
+    default_model: "anthropic/claude-sonnet-4-6"
+    fallback_models:
+      - "openai/gpt-4o-mini"
+    budget_tier: "standard"
+    cost_per_1m_tokens: 3.0
+
+  user_agent:
+    default_model: "anthropic/claude-sonnet-4-6"
+    fallback_models:
+      - "openai/gpt-4o"
+    budget_tier: "standard"
+    cost_per_1m_tokens: 3.0
+
+  automation:
+    default_model: "openai/gpt-4o-mini"
+    fallback_models:
+      - "google/gemini-1.5-flash"
+    budget_tier: "economy"
+    cost_per_1m_tokens: 1.5
+
+  cron:
+    default_model: "openai/gpt-4o-mini"
+    fallback_models:
+      - "google/gemini-1.5-flash"
+    budget_tier: "economy"
+    cost_per_1m_tokens: 1.5
+
+  heartbeat:
+    default_model: "openai/gpt-4o-mini"
+    fallback_models:
+      - "google/gemini-1.5-flash"
+    budget_tier: "economy"
+    cost_per_1m_tokens: 1.5
