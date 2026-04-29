@@ -11,21 +11,29 @@ from typing import Any, Callable, Coroutine, Optional
 
 
 class MessageType(Enum):
+    # Chat
     CHAT_REQUEST = auto()
     CHAT_CHUNK = auto()
     CHAT_RESPONSE_COMPLETE = auto()
     CHAT_ERROR = auto()
+    # Memory
     MEMORY_CONTEXT_REQUEST = auto()
     MEMORY_CONTEXT_RESPONSE = auto()
     MEMORY_STORE = auto()
     MEMORY_STORED = auto()
+    # Heartbeat
     HEARTBEAT_PING = auto()
     HEARTBEAT_PONG = auto()
+    # Agent lifecycle
     AGENT_STATUS_UPDATE = auto()
     SETUP_COMPLETE = auto()
     SHUTDOWN = auto()
+    # User profile
     USER_PROFILE_REQUEST = auto()
     USER_PROFILE_RESPONSE = auto()
+    # Automation (Phase 1 — US4)
+    AUTOMATE_REQUEST = auto()
+    AUTOMATE_RESULT = auto()
 
 
 @dataclass

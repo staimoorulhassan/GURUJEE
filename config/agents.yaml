@@ -1,7 +1,8 @@
 heartbeat:
-  ping_interval_seconds: 30
+  ping_interval_seconds: 8      # 8s + 5s timeout = 13s worst-case detection
   response_timeout_seconds: 5
   max_restart_attempts: 10
+  consecutive_miss_threshold: 2
 
 memory:
   short_term_max_turns: 10

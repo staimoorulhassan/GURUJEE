@@ -44,6 +44,7 @@ class GatewayDaemon:
         self._inbox: asyncio.Queue[Message] = asyncio.Queue()
         self._bus.register_agent("gateway", self._inbox)
         self._consumer_task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
+        self._ws_clients: set = set()  # WebSocket connections managed by server/websocket.py
 
     # ------------------------------------------------------------------ #
     # Public API                                                            #
@@ -58,6 +59,37 @@ class GatewayDaemon:
         await self._start_agents()
         await self._shutdown_event.wait()
         logger.info("GatewayDaemon: shutdown complete")
+
+    @property
+    def agent_states(self) -> dict[str, AgentState]:
+        """Dict of agent_name → AgentState (read by /agents endpoint and conftest)."""
+        return self._states
+
+    @property
+    def ready(self) -> bool:
+        """True once all agents have been started (running, error, or stopped).
+
+        An ERROR or STOPPED state still means the daemon started and is
+        accepting API requests — only STARTING means "not yet ready".
+        """
+        if not self._states:
+            return False
+        return all(
+            s.status in (AgentStatus.RUNNING, AgentStatus.ERROR, AgentStatus.STOPPED)
+            for s in self._states.values()
+        )
+
+    @property
+    def healthy(self) -> bool:
+        """True only when every agent is currently RUNNING (no errors)."""
+        if not self._states:
+            return False
+        return all(s.status == AgentStatus.RUNNING for s in self._states.values())
+
+    @property
+    def ws_clients(self) -> set:
+        """Set of active WebSocket connections (populated by websocket handler)."""
+        return self._ws_clients
 
     def get_agent_statuses(self) -> dict[str, str]:
         """Return {agent_name: status_name} for all registered agents."""

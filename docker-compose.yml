@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  gurujee:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gurujee-daemon
+    ports:
+      - "7171:7171"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./tests:/app/tests
+    environment:
+      PYTHONUNBUFFERED: "1"
+      GURUJEE_DATA_DIR: "/app/data"
+      GURUJEE_LOG_LEVEL: "INFO"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7171/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    stdin_open: true
+    tty: true
+
+  # Optional: Web UI (PWA static files)
+  # Can serve the static UI separately if needed
+  # ui:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "8080:80"
+  #   volumes:
+  #     - ./gurujee/server/static:/usr/share/nginx/html:ro
+  #   depends_on:
+  #     - gurujee
+
+volumes:
+  data:
+    driver: local
+
+networks:
+  default:
+    name: gurujee-network
+    driver: bridge

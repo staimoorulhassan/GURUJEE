@@ -239,6 +239,51 @@ The keystore module NEVER writes plaintext to disk.
 
 ---
 
+## 9. AutomationLog — `data/memory.db` (SQLite, table: `automation_log`)
+
+Append-only log of every automation command executed by `AutomationAgent`. Used for
+audit, debugging, and surfacing automation history in the PWA.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PK AUTOINCREMENT | Surrogate key |
+| `command_type` | TEXT | NOT NULL | One of: `open_app`, `device_setting`, `ui_input`, `screenshot`, `notification` |
+| `input_text` | TEXT | NOT NULL | Original natural-language command from user |
+| `action_json` | TEXT | NOT NULL | JSON: resolved action params (package, coordinates, value, etc.) |
+| `status` | TEXT | NOT NULL | One of: `success`, `failed`, `timeout`, `denied` |
+| `error_message` | TEXT | NULL | Shell error output if status ≠ success |
+| `duration_ms` | INTEGER | NULL | Execution time in milliseconds |
+| `created_at` | TEXT | NOT NULL | ISO-8601 UTC timestamp |
+
+**Indices**: `CREATE INDEX idx_automation_created ON automation_log(created_at DESC)`.
+**Retention**: Last 500 entries kept; older entries pruned by `AutomationAgent` on startup.
+**Writer**: `AutomationAgent` exclusively (single-writer WAL pattern, R-008).
+
+---
+
+## 10. NotificationCache — `data/memory.db` (SQLite, table: `notification_cache`)
+
+Rolling cache of recent Android notifications fetched via `termux-notification-list`.
+Used by the AI to answer "what are my latest notifications?" and by TTS read-aloud.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PK AUTOINCREMENT | Surrogate key |
+| `notif_id` | TEXT | NOT NULL | Android notification ID (string) |
+| `app_package` | TEXT | NOT NULL | Source app package name |
+| `app_name` | TEXT | NOT NULL | Human-readable app name |
+| `title` | TEXT | NULL | Notification title |
+| `content` | TEXT | NULL | Notification body text |
+| `is_read` | INTEGER | NOT NULL DEFAULT 0 | 0=unread, 1=read/dismissed |
+| `fetched_at` | TEXT | NOT NULL | ISO-8601 UTC timestamp when cached |
+
+**Indices**: `CREATE INDEX idx_notif_fetched ON notification_cache(fetched_at DESC)`.
+**Retention**: Last 100 entries; pruned on each fetch cycle.
+**Writer**: `AutomationAgent.notifications` action on poll / on-demand fetch.
+**Exposed via**: `GET /notifications` FastAPI endpoint.
+
+---
+
 ## Entity Relationships
 
 ```
@@ -263,10 +308,24 @@ UserAgent
 CronAgent (dormant)
   └── reads CronJob YAML (empty in Phase 1)
 
+AutomationAgent (on-demand)
+  ├── dispatches via automation/tool_router.py → automation/actions/*.py
+  ├── executes via automation/executor.py (ShizukuExecutor subprocess)
+  ├── writes AutomationLog (data/memory.db, automation_log table)
+  └── writes NotificationCache (data/memory.db, notification_cache table)
+
+FastAPI Server (not an agent — asyncio task in GatewayDaemon)
+  ├── POST /chat → SoulAgent via MessageBus → SSE stream to PWA
+  ├── GET  /agents → GatewayDaemon agent status snapshot
+  ├── POST /automate → AutomationAgent via MessageBus
+  ├── GET  /notifications → NotificationCache (latest 20)
+  ├── GET  /health → GatewayDaemon ready flag
+  └── WebSocket /ws → GatewayDaemon broadcast bus (real-time push)
+
 Keystore (not an agent — a module)
   └── read by SoulAgent (voice_id), GatewayDaemon (Phase 2 SIP)
 
-SetupWizard (not an agent — a Rich CLI)
+SetupWizard (not an agent — a Rich CLI / PWA-guided)
   └── writes SetupState
   └── writes Keystore entries
   └── writes soul_identity.yaml initial values

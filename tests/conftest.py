@@ -1,4 +1,15 @@
-"""Shared pytest fixtures for GURUJEE test suite."""
+"""Shared pytest fixtures for GURUJEE test suite.
+
+Fixtures:
+  mock_bus               — MockMessageBus that records sent messages
+  temp_data_dir          — mirrors runtime data/config layout in tmp_path
+  fake_soul_yaml         — soul_identity.yaml template copy in tmp_path
+  fake_user_config       — minimal user_config.yaml in tmp_path
+  fake_keystore          — unlocked Keystore backed by tmp_path (PIN=1234)
+  fake_openai_stream     — patches AIClient.stream_chat to yield 3 tokens
+  async_client           — httpx.AsyncClient for FastAPI app under test
+  mock_shizuku_executor  — ShizukuExecutor stub for automation tests
+"""
 from __future__ import annotations
 
 import asyncio
@@ -166,3 +177,51 @@ def fake_openai_stream(monkeypatch):
     from gurujee.ai import client as ai_client_mod
     monkeypatch.setattr(ai_client_mod.AIClient, "stream_chat", _mock_stream_chat)
     return tokens
+
+
+# ------------------------------------------------------------------ #
+# FastAPI async test client                                             #
+# ------------------------------------------------------------------ #
+
+@pytest.fixture
+async def async_client():
+    """httpx.AsyncClient pointed at the FastAPI app for integration tests.
+
+    Usage::
+
+        async def test_health(async_client):
+            r = await async_client.get("/health")
+            assert r.status_code == 200
+    """
+    import httpx
+    from gurujee.server.app import create_app
+
+    # Minimal stub gateway so the app can be created without a real daemon
+    gateway_stub = MagicMock()
+    gateway_stub.agent_states = {}
+    gateway_stub.ready = True
+    gateway_stub.ws_clients = set()
+
+    app = create_app(gateway_stub)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        yield client
+
+
+# ------------------------------------------------------------------ #
+# Shizuku executor stub                                                 #
+# ------------------------------------------------------------------ #
+
+@pytest.fixture
+def mock_shizuku_executor():
+    """Returns a MagicMock ShizukuExecutor that reports available and returns empty output."""
+    executor = MagicMock()
+    executor.is_available = MagicMock(return_value=True)
+
+    async def _fake_execute(cmd: str, timeout: int = 10):  # noqa: ANN001
+        return ("", "", 0)  # stdout, stderr, returncode
+
+    executor.execute = AsyncMock(side_effect=_fake_execute)
+    return executor

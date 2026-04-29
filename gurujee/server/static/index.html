@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#00c8d7">
+  <title>GURUJEE</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="status-bar">
+    <img id="status-logo" src="/static/icon.png" alt="GuruJee">
+    <span id="status-label" style="color:#00c8d7;font-weight:600;letter-spacing:.5px;">GURUJEE</span>
+    <span id="agent-indicator" class="indicator indicator--amber" style="margin-left:auto"></span>
+    <button id="settings-btn" aria-label="Settings" title="Settings" style="background:none;border:none;color:#00c8d7;cursor:pointer;font-size:20px;padding:0 10px;">⚙️</button>
+  </div>
+
+  <div id="chat-container" role="log" aria-live="polite"></div>
+
+  <div id="input-area">
+    <textarea
+      id="message-input"
+      rows="1"
+      placeholder="Message GURUJEE…"
+      aria-label="Message input"
+    ></textarea>
+    <button id="voice-btn" aria-label="Voice input" title="Voice input">🎙</button>
+    <button id="send-btn" aria-label="Send message">Send</button>
+  </div>
+
+  <!-- Settings Modal (loaded asynchronously) -->
+  <div id="settings-container"></div>
+
+  <script src="/static/app.js"></script>
+  <script src="/static/settings.js"></script>
+  <script>
+    // Load settings modal HTML
+    fetch('/static/settings.html')
+      .then(r => r.text())
+      .then(html => {
+        document.getElementById('settings-container').innerHTML = html;
+      })
+      .catch(err => console.warn('Failed to load settings modal:', err));
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/static/sw.js').catch(console.warn);
+    }
+  </script>
+</body>
+</html>

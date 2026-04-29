@@ -95,7 +95,7 @@ The JSON payload structure (decrypted, in-memory only):
 **Key derivation**:
 ```
 salt    = sha256(android_id + ":gurujee")[0:16]   # device-bound, 16 bytes
-key     = PBKDF2HMAC(SHA256, password=pin.encode(), salt=salt, length=32, iterations=480_000)
+key     = PBKDF2HMAC(SHA256, password=pin.encode(), salt=salt, length=32, iterations=600_000)
 ```
 
 `android_id` retrieved via:
@@ -103,7 +103,8 @@ key     = PBKDF2HMAC(SHA256, password=pin.encode(), salt=salt, length=32, iterat
 settings get secure android_id   (via subprocess, no root)
 ```
 Falls back to a random 16-byte salt stored in `data/.device_salt` if `android_id`
-is unavailable (e.g., running in emulator or CI).
+is unavailable (e.g., running in emulator or CI). Note: Iterations increased
+from 480k to 600k (0.5s on ARM64) to maintain modern security standards (SC-006).
 
 ---
 
