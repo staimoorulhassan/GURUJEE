@@ -24,6 +24,15 @@ class CallHandler:
         """Add contact."""
         self._contacts[phone_number] = contact_name
 
+    def _mask_phone_number(self, phone_number: Optional[str]) -> str:
+        """Mask phone number for safe logging."""
+        if not phone_number:
+            return "[redacted]"
+        visible_digits = 2
+        if len(phone_number) <= visible_digits:
+            return "*" * len(phone_number)
+        return f"{'*' * (len(phone_number) - visible_digits)}{phone_number[-visible_digits:]}"
+
     def determine_route(self, call_event: CallEvent, priority_tier: str = "normal") -> str:
         """Determine route for call: answer or voicemail."""
         # Simple logic: priority_tier influences route
@@ -43,7 +52,8 @@ class CallHandler:
 
     def record_call_log(self, call_event: CallEvent, route: str, outcome: str) -> None:
         """Log call for audit trail."""
-        logger.info(f"Call from {call_event.phone_number} routed to {route}: {outcome}")
+        masked_phone = self._mask_phone_number(call_event.phone_number)
+        logger.info(f"Call from {masked_phone} routed to {route}: {outcome}")
 
     async def transcribe_voicemail(self, audio_path: str) -> Optional[str]:
         """Transcribe voicemail audio to text (STT)."""
