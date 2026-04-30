@@ -41,7 +41,8 @@ if [ -d "$GURUJEE_DIR/.git" ]; then
     REMOTE_URL="$(git -C "$GURUJEE_DIR" remote get-url origin 2>/dev/null || echo "")"
     if echo "$REMOTE_URL" | grep -qi "staimoorulhassan/GURUJEE"; then
         echo "Existing install detected — pulling latest..."
-        git -C "$GURUJEE_DIR" pull --ff-only
+        git -C "$GURUJEE_DIR" fetch origin
+        git -C "$GURUJEE_DIR" reset --hard origin/HEAD
     else
         echo "Error: $GURUJEE_DIR contains a git repo with a different remote:" >&2
         echo "  found:    $REMOTE_URL" >&2
