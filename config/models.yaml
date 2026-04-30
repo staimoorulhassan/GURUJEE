@@ -422,7 +422,9 @@ custom_providers:
       - {id: gpt-5.4,         label: "GPT-5.4 (Copilot)",    ctx: 200000}
 
 # =================================================================
-# TRANSCRIPTION PROVIDERS (STT — separate from LLM providers)
+# TRANSCRIPTION PROVIDERS (STT)
+# Pollinations whisper/scribe models use the same gen.pollinations.ai/v1
+# endpoint and POLLINATIONS_API_KEY as the text models.
 # =================================================================
 
 transcription_providers:
@@ -431,6 +433,22 @@ transcription_providers:
     type: "local"
     model: "tiny.en"
     default: true
+
+  pollinations_whisper:
+    label: "Pollinations Whisper Large V3 (cloud)"
+    base_url: "https://gen.pollinations.ai/v1"
+    auth_env: "POLLINATIONS_API_KEY"
+    model: "whisper"
+    type: "cloud"
+    default: false
+
+  pollinations_scribe:
+    label: "Pollinations ElevenLabs Scribe v2 (cloud)"
+    base_url: "https://gen.pollinations.ai/v1"
+    auth_env: "POLLINATIONS_API_KEY"
+    model: "scribe"
+    type: "cloud"
+    default: false
 
   deepgram:
     label: "Deepgram (cloud STT)"
@@ -441,13 +459,24 @@ transcription_providers:
 
 # =================================================================
 # IMAGE / VIDEO GENERATION PROVIDERS
+# Pollinations image and video models share the same gen.pollinations.ai/v1
+# endpoint and POLLINATIONS_API_KEY — one API, one key for everything.
 # =================================================================
 
 image_providers:
   pollinations_image:
-    label: "Pollinations (default, free)"
-    model: "pollinations/gemini-search"
+    label: "Pollinations Image (default — flux)"
+    base_url: "https://gen.pollinations.ai/v1"
+    auth_env: "POLLINATIONS_API_KEY"
     default: true
+    models:
+      - {id: flux,          label: "Flux Schnell (free)"}
+      - {id: zimage,        label: "Z-Image Turbo (free)"}
+      - {id: gptimage,      label: "GPT Image 1 Mini (free)"}
+      - {id: klein,         label: "FLUX.2 Klein 4B (alpha)"}
+      - {id: p-image,       label: "Pruna p-image (paid)"}
+      - {id: p-image-edit,  label: "Pruna p-image-edit (paid)"}
+
   fal:
     label: "fal.ai"
     base_url: "https://fal.run"
@@ -463,6 +492,19 @@ image_providers:
     base_url: "http://localhost:8188"
     auth_env: ""
     api_compat: "comfy"
+
+video_providers:
+  pollinations_video:
+    label: "Pollinations Video"
+    base_url: "https://gen.pollinations.ai/v1"
+    auth_env: "POLLINATIONS_API_KEY"
+    default: true
+    models:
+      - {id: ltx-2,         label: "LTX-2.3 (alpha, free)"}
+      - {id: seedance-pro,  label: "Seedance Pro-Fast (paid)"}
+      - {id: wan-fast,      label: "Wan 2.2 (paid)"}
+      - {id: p-video,       label: "Pruna p-video (paid)"}
+      - {id: seedance,      label: "Seedance Lite (paid)"}
 
 # =================================================================
 # FAILOVER CONFIG (mirrors OpenClaw failover system)
