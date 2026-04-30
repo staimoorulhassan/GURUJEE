@@ -108,7 +108,7 @@ class SetupWizard:
         default_model = "nova-fast"
         choice = Prompt.ask(
             f"Choose a model",
-            choices=["nova-fast", "gemini-fast", "mistral"],
+            choices=["nova-fast", "mistral", "gemini-fast", "minimax", "claude-fast", "openai"],
             default=default_model
         )
         state["model"] = choice

@@ -11,8 +11,8 @@ mode: merge
 default:
   primary: "pollinations/nova-fast"
   fallbacks:
-    - "pollinations/gemini-fast"
     - "pollinations/mistral"
+    - "pollinations/gemini-fast"
 
 # =================================================================
 # TIER 1 — BUILT-IN PROVIDERS (pi-ai catalog, no models.providers needed)
@@ -30,12 +30,20 @@ builtin_providers:
     auth_note: "Free API key — sign up at https://auth.pollinations.ai (30 seconds, no credit card)"
     api_compat: "openai"
     models:
-      - {id: nova-fast,      label: "Nova Fast",         ctx: 32000,  caps: [chat, tools]}
-      - {id: gemini-fast,    label: "Gemini Fast",        ctx: 128000, caps: [chat, tools, vision]}
-      - {id: gemini-search,  label: "Gemini Search",      ctx: 128000, caps: [chat, tools, vision, search, image_gen]}
-      - {id: openai-fast,    label: "OpenAI Fast",        ctx: 16000,  caps: [chat, tools]}
-      - {id: grok,           label: "Grok",               ctx: 131072, caps: [chat, tools]}
-      - {id: mistral,        label: "Mistral",            ctx: 32000,  caps: [chat, tools]}
+      - {id: nova-fast,             label: "Nova Micro (AWS)",          ctx: 32000,  caps: [chat, tools]}
+      - {id: nova,                  label: "Nova 2 Lite (AWS)",         ctx: 32000,  caps: [chat, tools]}
+      - {id: mistral,               label: "Mistral Small 3.2",         ctx: 32000,  caps: [chat, tools]}
+      - {id: gemini-fast,           label: "Gemini 2.5 Flash Lite",     ctx: 128000, caps: [chat, tools, vision]}
+      - {id: gemini-search,         label: "Gemini 2.5 Flash (Search)", ctx: 128000, caps: [chat, tools, vision, search]}
+      - {id: openai,                label: "GPT-5.4 Nano",              ctx: 16000,  caps: [chat, tools]}
+      - {id: qwen-safety,           label: "Qwen3Guard 8B",             ctx: 32000,  caps: [chat]}
+      - {id: qwen-coder,            label: "Qwen3 Coder 30B",           ctx: 32000,  caps: [chat, tools]}
+      - {id: qwen-vision,           label: "Qwen3 VL 30B (Vision)",     ctx: 32000,  caps: [chat, vision]}
+      - {id: claude-fast,           label: "Claude Haiku 4.5",          ctx: 200000, caps: [chat, tools]}
+      - {id: minimax,               label: "MiniMax M2.7",              ctx: 32000,  caps: [chat, tools]}
+      - {id: perplexity-fast,       label: "Perplexity Sonar",          ctx: 128000, caps: [chat, search]}
+      - {id: perplexity-reasoning,  label: "Perplexity Sonar Reasoning",ctx: 128000, caps: [chat, search, reasoning]}
+      - {id: midijourney,           label: "MIDIjourney",               ctx: 4000,   caps: [chat]}
 
   # --- OpenAI ---
   openai:
