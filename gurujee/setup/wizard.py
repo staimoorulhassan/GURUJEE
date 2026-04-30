@@ -3,6 +3,7 @@ import sys
 import subprocess
 import urllib.request
 import hashlib
+from pathlib import Path
 from typing import Dict, Any, Callable
 from rich.console import Console
 from rich.prompt import Prompt
@@ -112,3 +113,50 @@ class SetupWizard:
         )
         state["model"] = choice
         console.print(f"Selected model: [bold cyan]{choice}[/bold cyan]")
+
+        # All three models use Pollinations, which now requires a free API key.
+        console.print(
+            "\n[yellow]Pollinations requires a free API key.[/yellow]\n"
+            "  Get one at: [bold]https://auth.pollinations.ai[/bold] (30 seconds, no credit card)\n"
+        )
+        api_key = Prompt.ask(
+            "Paste your Pollinations API key (press Enter to skip)",
+            password=True,
+            default="",
+        ).strip()
+        if api_key:
+            self._save_api_key_to_env("POLLINATIONS_API_KEY", api_key)
+            console.print("[green]✓[/green] API key saved. Run [bold]gurujee config --key[/bold] to update it later.")
+        else:
+            console.print(
+                "[dim]Skipped — the app will show a 401 error until you add a key.\n"
+                "  Run [bold]gurujee config --key[/bold] at any time to add it.[/dim]"
+            )
+
+    def _save_api_key_to_env(self, var_name: str, value: str) -> None:
+        """Write or update an API key in ~/.gurujee.env."""
+        env_file = Path.home() / ".gurujee.env"
+        try:
+            existing = env_file.read_text(encoding="utf-8") if env_file.exists() else ""
+        except OSError:
+            existing = ""
+
+        # Replace existing line if present, otherwise append.
+        new_line = f"export {var_name}='{value}'"
+        lines = existing.splitlines()
+        replaced = False
+        for i, line in enumerate(lines):
+            if line.startswith(f"export {var_name}=") or line.startswith(f"{var_name}="):
+                lines[i] = new_line
+                replaced = True
+                break
+        if not replaced:
+            lines.append(new_line)
+
+        try:
+            env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            env_file.chmod(0o600)
+            # Make available in the current process so headless daemon picks it up.
+            os.environ[var_name] = value
+        except OSError as exc:
+            console.print(f"[yellow]Could not write to {env_file}: {exc}[/yellow]")
