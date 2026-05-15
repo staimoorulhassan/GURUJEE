@@ -29,3 +29,6 @@ launcher/__pycache__/
 # Claude Code worktrees
 .claude/worktrees/
 .claude/settings.local.json
+
+# Git worktrees (project-local)
+.worktrees/

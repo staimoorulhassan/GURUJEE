@@ -38,7 +38,8 @@ Cascade         :
   heartbeat_agent.py — PING_INTERVAL 30s → 8s, PONG_TIMEOUT 5s → 2s.
   config/security.yaml — anchor hosts + pin_policy + keystore policy added.
   gurujee/ai/client.py — _build_allowlist() reads from config/security.yaml.
-Deferred TODOs  : T069 idle RAM profiling pending on-device Android/Termux measurement.
+Deferred TODOs  : T069 idle RAM profiling — Windows measurement: 59.30 MB (exceeds 50 MB ceiling).
+                  ARM64 Termux measurement still required as Phase 2 pre-release gate.
                   wizard.py and PWA settings panel need Pollinations key entry UI.
 
 --- Previous (1.1.0 → 1.1.1) ---

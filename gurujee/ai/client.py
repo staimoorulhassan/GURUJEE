@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -378,26 +379,32 @@ class AIClient:
 
     def _get_api_key_for_provider(self, provider_cfg: dict[str, Any]) -> str:
         """
-        Resolve the API key for a provider from the injected keystore without reading environment variables.
-        
-        Parameters:
-            provider_cfg (dict[str, Any]): Provider configuration; may include "api_key_required" (bool) and "auth_env" (str) specifying the keystore key name.
-        
-        Returns:
-            str: The API key from the keystore if present and required, otherwise an empty string.
+        Resolve the API key for a provider.
+
+        Resolution order:
+          1. Keystore (unlocked at runtime for interactive/TUI mode).
+          2. Environment variable named by auth_env (set from ~/.gurujee.env
+             for headless/boot mode, as documented in __main__.py).
+
+        Returns an empty string when no key is found or the provider
+        does not require authentication.
         """
         if not provider_cfg.get("api_key_required", True):
             return ""
-        if self._keystore is None:
-            return ""
         auth_env = provider_cfg.get("auth_env", "")
-        if auth_env and hasattr(self._keystore, "get"):
+        # 1. Keystore
+        if self._keystore is not None and auth_env and hasattr(self._keystore, "get"):
             try:
                 key = self._keystore.get(auth_env)
                 if key:
                     return str(key)
             except Exception:
                 pass
+        # 2. Environment variable (headless boot path: sourced from ~/.gurujee.env)
+        if auth_env:
+            env_val = os.environ.get(auth_env, "")
+            if env_val:
+                return env_val
         return ""
 
     # ------------------------------------------------------------------ #
